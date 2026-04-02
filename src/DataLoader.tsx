@@ -99,7 +99,7 @@ const DataLoader: React.FC<DataLoaderProps> = ({ onDataLoaded, onCancel }) => {
     setImageField('');
     setContinuousFields([]);
     setGroupableFields([]);
-    setDisplayFields([]);
+    setDisplayFields([...headers]);
     setInfoFields([]);
     setStep(2);
   };
