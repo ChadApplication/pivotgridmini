@@ -15,8 +15,9 @@ const App: React.FC = () => {
   const [showImporter, setShowImporter] = useState(false);
   const [importedItems, setImportedItems] = useState<Item[] | null>(null);
   const [imageBlobs, setImageBlobs] = useState<Record<string, string>>({});
+  const [useDemo, setUseDemo] = useState(false);
 
-  const ITEMS = importedItems || DEFAULT_ITEMS;
+  const ITEMS = importedItems || (useDemo ? DEFAULT_ITEMS : []);
 
   // 1. Viewport Size Tracking (Define this first!)
   const [viewportSize, setViewportSize] = useState({ 
@@ -178,27 +179,19 @@ const App: React.FC = () => {
     });
     dataFolder.file('items.csv', "\uFEFF" + [header, ...rows].join("\n"));
 
-    // Add images: from blob URLs or fetch from src
-    for (const item of filteredItems) {
+    // Add images: blob URLs only (external URLs skipped due to CORS)
+    const imagePromises = filteredItems.map(async (item) => {
       const imgName = `${String(item.id).padStart(3, '0')}.jpg`;
       const blobUrl = imageBlobs[item.image] || imageBlobs[imgName];
-
       if (blobUrl && blobUrl.startsWith('blob:')) {
         try {
           const resp = await fetch(blobUrl);
           const blob = await resp.blob();
           imagesFolder.file(imgName, blob);
         } catch { /* skip */ }
-      } else if (item.image && item.image.startsWith('http')) {
-        try {
-          const resp = await fetch(item.image);
-          if (resp.ok) {
-            const blob = await resp.blob();
-            imagesFolder.file(imgName, blob);
-          }
-        } catch { /* skip - external image may fail */ }
       }
-    }
+    });
+    await Promise.allSettled(imagePromises);
 
     const content = await zip.generateAsync({ type: 'blob' });
     const url = URL.createObjectURL(content);
@@ -232,6 +225,12 @@ const App: React.FC = () => {
         </div>
         
         <div className="p-8 space-y-10 overflow-y-auto flex-1 pb-20">
+          {ITEMS.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-40 text-center">
+              <p className="text-xs text-slate-400">Import data to enable filters</p>
+            </div>
+          ) : (
+          <>
           <div className="space-y-4">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
               <Search size={14} /> Search
@@ -434,6 +433,8 @@ const App: React.FC = () => {
               ))}
             </div>
           </div>
+          </>
+          )}
         </div>
 
         <div className="p-8 bg-slate-50 border-t border-slate-100">
@@ -482,15 +483,50 @@ const App: React.FC = () => {
             <button
               onClick={downloadZip}
               className="flex items-center gap-2 px-3 py-2 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all"
-              title={`Download ${filteredItems.length} items as CSV`}
+              title={`Download ${filteredItems.length} items as ZIP`}
             >
               <Download size={16} />
               <span className="text-[10px] font-bold uppercase tracking-wider hidden lg:inline">Export</span>
             </button>
+            {importedItems && (
+              <button
+                onClick={() => { setImportedItems(null); setImageBlobs({}); setUseDemo(false); clearFilters(); }}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all"
+                title="Clear imported data, restore demo"
+              >
+                <X size={16} />
+                <span className="text-[10px] font-bold uppercase tracking-wider hidden lg:inline">Clear</span>
+              </button>
+            )}
           </div>
         </header>
 
         <div className={`flex-1 bg-slate-50/30 ${viewType === 'grid' ? 'overflow-y-auto p-10 lg:p-14' : 'overflow-hidden p-2'}`}>
+          {ITEMS.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-center">
+              <div className="w-20 h-20 bg-slate-100 rounded-3xl flex items-center justify-center mb-6">
+                <Upload className="w-10 h-10 text-slate-300" />
+              </div>
+              <h2 className="text-2xl font-black text-slate-800 mb-2">No Data Loaded</h2>
+              <p className="text-sm text-slate-400 mb-8 max-w-sm">
+                Import a ZIP package (data/ + images/) or CSV/JSON file to start exploring your collection.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowImporter(true)}
+                  className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all"
+                >
+                  <Upload size={16} /> Import Data
+                </button>
+                <button
+                  onClick={() => setUseDemo(true)}
+                  className="flex items-center gap-2 px-6 py-3 bg-slate-100 text-slate-600 text-sm font-bold rounded-xl hover:bg-slate-200 transition-all"
+                >
+                  Load Demo (200 items)
+                </button>
+              </div>
+            </div>
+          ) : (
           <AnimatePresence mode="wait">
             {viewType === 'grid' ? (
               <motion.div 
@@ -584,6 +620,7 @@ const App: React.FC = () => {
               </motion.div>
             )}
           </AnimatePresence>
+          )}
         </div>
 
         {/* Detail Modal: navigation helpers */}
