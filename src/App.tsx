@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Filter, Grid, LayoutPanelLeft, Search, X, BarChart2, Calendar, Tag, ChevronRight, Hash } from 'lucide-react';
+import { Filter, Grid, LayoutPanelLeft, Search, X, BarChart2, Calendar, Tag, ChevronRight, ChevronLeft, Hash, User, Download } from 'lucide-react';
 import { ITEMS, Item } from './data';
 
 const App: React.FC = () => {
@@ -95,6 +95,21 @@ const App: React.FC = () => {
     setSelectedCategories(prev => 
       prev.includes(category) ? prev.filter(c => c !== category) : [...prev, category]
     );
+  };
+
+  const downloadCSV = () => {
+    const header = "id,title,category,author,year,image";
+    const rows = filteredItems.map(i =>
+      `${i.id},"${i.title}","${i.category}","${i.author}",${i.year},"${i.image}"`
+    );
+    const csv = [header, ...rows].join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `pivotgrid_${filteredItems.length}_items.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const clearFilters = () => {
@@ -288,6 +303,14 @@ const App: React.FC = () => {
                 <span className="ml-2 px-2 py-0.5 bg-slate-100 rounded text-[9px] font-black text-slate-500 uppercase">{densityMode} Density</span>
              </div>
           </div>
+          <button
+            onClick={downloadCSV}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all"
+            title={`Download ${filteredItems.length} items as CSV`}
+          >
+            <Download size={16} />
+            <span className="text-[10px] font-bold uppercase tracking-wider hidden lg:inline">Export</span>
+          </button>
         </header>
 
         <div className={`flex-1 bg-slate-50/30 ${viewType === 'grid' ? 'overflow-y-auto p-10 lg:p-14' : 'overflow-hidden p-2'}`}>
@@ -386,38 +409,122 @@ const App: React.FC = () => {
           </AnimatePresence>
         </div>
 
+        {/* Detail Modal: navigation helpers */}
+        {(() => {
+          const currentIdx = selectedItem ? filteredItems.findIndex(i => i.id === selectedItem.id) : -1;
+          const prevItem = currentIdx > 0 ? filteredItems[currentIdx - 1] : null;
+          const nextItem = currentIdx < filteredItems.length - 1 ? filteredItems[currentIdx + 1] : null;
+
+          // Keyboard navigation
+          // eslint-disable-next-line react-hooks/rules-of-hooks
+          useEffect(() => {
+            if (!selectedItem) return;
+            const handler = (e: KeyboardEvent) => {
+              if (e.key === 'Escape') setSelectedItem(null);
+              if (e.key === 'ArrowLeft' && prevItem) setSelectedItem(prevItem);
+              if (e.key === 'ArrowRight' && nextItem) setSelectedItem(nextItem);
+            };
+            window.addEventListener('keydown', handler);
+            return () => window.removeEventListener('keydown', handler);
+          }, [selectedItem, prevItem, nextItem]);
+
+          return null;
+        })()}
+
         {/* DETAIL MODAL */}
         <AnimatePresence>
-          {selectedItem && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-6 lg:p-24 overflow-hidden">
+          {selectedItem && (() => {
+            const currentIdx = filteredItems.findIndex(i => i.id === selectedItem.id);
+            const prevItem = currentIdx > 0 ? filteredItems[currentIdx - 1] : null;
+            const nextItem = currentIdx < filteredItems.length - 1 ? filteredItems[currentIdx + 1] : null;
+            const relatedItems = ITEMS.filter(i => i.category === selectedItem.category && i.id !== selectedItem.id).slice(0, 6);
+
+            return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-6 lg:p-16 overflow-hidden">
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedItem(null)}
                 className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
               />
-              <motion.div layoutId={`item-${selectedItem.id}`}
-                className="bg-white w-full max-w-5xl h-full max-h-[700px] rounded-[40px] shadow-2xl overflow-hidden flex flex-col lg:flex-row relative z-10"
-              >
-                <button onClick={() => setSelectedItem(null)} className="absolute top-8 right-8 w-12 h-12 bg-white/90 backdrop-blur rounded-2xl flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-xl z-20 transition-all active:scale-90">
-                  <X size={24} />
+
+              {/* Prev button */}
+              {prevItem && (
+                <button onClick={() => setSelectedItem(prevItem)}
+                  className="absolute left-4 lg:left-8 z-30 w-12 h-12 bg-white/90 backdrop-blur rounded-2xl flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-xl transition-all active:scale-90">
+                  <ChevronLeft size={24} />
                 </button>
-                <div className="lg:w-1/2 h-64 lg:h-auto bg-slate-100 overflow-hidden relative">
+              )}
+
+              {/* Next button */}
+              {nextItem && (
+                <button onClick={() => setSelectedItem(nextItem)}
+                  className="absolute right-4 lg:right-8 z-30 w-12 h-12 bg-white/90 backdrop-blur rounded-2xl flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-xl transition-all active:scale-90">
+                  <ChevronRight size={24} />
+                </button>
+              )}
+
+              <motion.div layoutId={`item-${selectedItem.id}`}
+                className="bg-white w-full max-w-5xl h-full max-h-[750px] rounded-[40px] shadow-2xl overflow-hidden flex flex-col lg:flex-row relative z-10"
+              >
+                {/* Close + counter */}
+                <div className="absolute top-6 right-6 flex items-center gap-3 z-20">
+                  <span className="px-3 py-1 bg-black/40 backdrop-blur text-white text-[11px] font-mono rounded-full">
+                    {currentIdx + 1} / {filteredItems.length}
+                  </span>
+                  <button onClick={() => setSelectedItem(null)} className="w-10 h-10 bg-white/90 backdrop-blur rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-lg transition-all active:scale-90">
+                    <X size={20} />
+                  </button>
+                </div>
+
+                {/* Image */}
+                <div className="lg:w-1/2 h-56 lg:h-auto bg-slate-100 overflow-hidden relative">
                    <img src={selectedItem.image} alt={selectedItem.title} className="w-full h-full object-cover" />
                 </div>
-                <div className="lg:w-1/2 p-12 lg:p-20 flex flex-col overflow-y-auto">
-                   <div className="inline-flex px-4 py-1.5 bg-blue-600 text-white text-[9px] font-black uppercase tracking-widest rounded-full self-start mb-8 shadow-lg shadow-blue-200">
+
+                {/* Content */}
+                <div className="lg:w-1/2 p-10 lg:p-14 flex flex-col overflow-y-auto">
+                   <div className="inline-flex px-4 py-1.5 bg-blue-600 text-white text-[9px] font-black uppercase tracking-widest rounded-full self-start mb-6 shadow-lg shadow-blue-200">
                      {selectedItem.category}
                    </div>
-                   <h2 className="text-4xl font-black text-slate-900 leading-tight mb-4">{selectedItem.title}</h2>
-                   <p className="text-xl text-slate-400 font-medium mb-12 italic">Published in {selectedItem.year} by {selectedItem.author}</p>
-                   <div className="space-y-6 flex-1 text-sm border-t border-slate-100 pt-10 text-slate-500 leading-relaxed">
+                   <h2 className="text-3xl font-black text-slate-900 leading-tight mb-3">{selectedItem.title}</h2>
+
+                   {/* Metadata */}
+                   <div className="flex flex-wrap gap-4 mb-8 text-sm text-slate-500">
+                     <span className="flex items-center gap-1.5"><User size={14} /> {selectedItem.author}</span>
+                     <span className="flex items-center gap-1.5"><Calendar size={14} /> {selectedItem.year}</span>
+                     <span className="flex items-center gap-1.5"><Hash size={14} /> ID-{selectedItem.id}</span>
+                   </div>
+
+                   <div className="text-sm border-t border-slate-100 pt-6 text-slate-500 leading-relaxed mb-8">
                       <p>
-                        Explore detailed insights about this discovery. In high-density mode, 
+                        Explore detailed insights about this discovery. In high-density mode,
                         the system optimizes the display for pattern recognition, while detail view provides the full semantic context.
                       </p>
+                   </div>
+
+                   {/* Related items */}
+                   {relatedItems.length > 0 && (
+                     <div className="border-t border-slate-100 pt-6">
+                       <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Related in {selectedItem.category}</h4>
+                       <div className="flex gap-2">
+                         {relatedItems.map(ri => (
+                           <button key={ri.id} onClick={() => setSelectedItem(ri)}
+                             className="w-12 h-12 rounded-lg overflow-hidden border-2 border-transparent hover:border-blue-500 transition-all flex-shrink-0">
+                             <img src={ri.image} alt={ri.title} className="w-full h-full object-cover" />
+                           </button>
+                         ))}
+                       </div>
+                     </div>
+                   )}
+
+                   {/* Keyboard hint */}
+                   <div className="mt-auto pt-4 flex gap-3 text-[10px] text-slate-300">
+                     <span className="px-2 py-0.5 bg-slate-50 rounded">← →</span> navigate
+                     <span className="px-2 py-0.5 bg-slate-50 rounded">ESC</span> close
                    </div>
                 </div>
               </motion.div>
             </div>
-          )}
+            );
+          })()}
         </AnimatePresence>
       </main>
     </div>
