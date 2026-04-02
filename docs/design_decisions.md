@@ -207,3 +207,73 @@ For a client-side app without backend:
 | 4 | Storage: localStorage default | Proposed | 2026-04-02 |
 | 5 | Multi-column threshold: 25 | Decided | 2026-04-02 |
 | 6 | 3-level zoom architecture | Decided | 2026-04-02 |
+| 7 | 2-step data loading (load → column role mapping) | **Decided** | 2026-04-02 |
+
+---
+
+## 6. Two-Step Data Loading Architecture
+
+### Problem
+
+Current implementation hardcodes filter/stack fields (category, year, author, tags). When data schema changes, code must be modified.
+
+### Solution: 2-Step Load → Map
+
+**Step 1: Data Load**
+- CSV/JSON/Excel drag-and-drop or manual entry
+- Auto-detect all columns from file headers or JSON keys
+- Show column preview (first 5 rows)
+
+**Step 2: Column Role Mapping**
+User assigns semantic roles to detected columns:
+
+```
+Role Assignment UI:
+┌──────────────────────────────────────────┐
+│  REQUIRED ROLES                          │
+│  Title:       [column_name    ▼]         │
+│  Image:       [image_url      ▼] (opt)   │
+│                                          │
+│  GROUPABLE FIELDS (check all that apply) │
+│  ☑ category    → Stack By, Filter        │
+│  ☑ year        → Stack By, Filter, Range │
+│  ☑ author      → Stack By, Filter        │
+│  ☑ tags        → Stack By, Filter        │
+│  ☐ department  → Stack By, Filter        │
+│  ☐ status      → Stack By, Filter        │
+│                                          │
+│  DISPLAY FIELDS (shown in detail modal)  │
+│  ☑ description                           │
+│  ☑ email                                 │
+│  ☑ url                                   │
+│                                          │
+│  YEAR FIELD (for histogram range slider) │
+│  Year Column:  [pub_year      ▼]         │
+│                                          │
+│  [Cancel]              [Apply & Render]  │
+└──────────────────────────────────────────┘
+```
+
+### Data Flow
+
+```
+File Upload / Manual Entry
+      ↓
+Column Detection (auto)
+      ↓
+Role Mapping UI (user)
+      ↓
+Schema Config saved to localStorage
+      ↓
+Dynamic Filter/Stack/Display rendering
+      ↓
+PivotGrid View
+```
+
+### Implementation Notes
+
+- Sidebar filters are generated dynamically from "groupable" columns
+- Stack By options are generated from "groupable" columns
+- Detail modal shows all "display" fields
+- Year histogram uses the designated "year" column
+- Schema config persists in localStorage so re-upload of same format auto-maps

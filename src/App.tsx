@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Filter, Grid, LayoutPanelLeft, Search, X, BarChart2, Calendar, Tag, ChevronRight, ChevronLeft, Hash, User, Download } from 'lucide-react';
-import { ITEMS, Item } from './data';
+import { Filter, Grid, LayoutPanelLeft, Search, X, BarChart2, Calendar, Tag, ChevronRight, ChevronLeft, Hash, User, Download, Upload } from 'lucide-react';
+import { ITEMS as DEFAULT_ITEMS, Item } from './data';
+import DataLoader, { ColumnMapping } from './DataLoader';
 
 const App: React.FC = () => {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -11,6 +12,11 @@ const App: React.FC = () => {
   const [viewType, setViewType] = useState<'grid' | 'group'>('grid');
   const [groupBy, setGroupBy] = useState<'category' | 'year' | 'author' | 'tag'>('category');
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
+  const [showImporter, setShowImporter] = useState(false);
+  const [importedItems, setImportedItems] = useState<Item[] | null>(null);
+  const [imageBlobs, setImageBlobs] = useState<Record<string, string>>({});
+
+  const ITEMS = importedItems || DEFAULT_ITEMS;
 
   // 1. Viewport Size Tracking (Define this first!)
   const [viewportSize, setViewportSize] = useState({ 
@@ -125,6 +131,37 @@ const App: React.FC = () => {
     setSelectedCategories(prev => 
       prev.includes(category) ? prev.filter(c => c !== category) : [...prev, category]
     );
+  };
+
+  const handleDataLoaded = (
+    rows: Record<string, string>[],
+    _columns: string[],
+    mapping: ColumnMapping,
+    blobs: Record<string, string>
+  ) => {
+    const items: Item[] = rows.map((row, i) => {
+      const imageVal = mapping.imageField ? row[mapping.imageField] || '' : '';
+      // Resolve image: check blobs (ZIP images), then try images/ prefix, then raw value
+      const resolvedImage = blobs[imageVal] || blobs[`images/${imageVal}`] || imageVal;
+
+      return {
+        id: i + 1,
+        title: row[mapping.titleField] || `Item ${i + 1}`,
+        description: row['description'] || '',
+        category: mapping.groupableFields[0] ? row[mapping.groupableFields[0]] || '' : '',
+        tags: row['tags'] ? row['tags'].split(';').map(t => t.trim()).filter(Boolean) : [],
+        author: row['author'] || '',
+        year: mapping.yearField ? parseInt(row[mapping.yearField]) || 0 : 0,
+        image: resolvedImage,
+        email: row['email'] || '',
+        url: row['url'] || '',
+      };
+    });
+
+    setImportedItems(items);
+    setImageBlobs(blobs);
+    setShowImporter(false);
+    clearFilters();
   };
 
   const downloadCSV = () => {
@@ -403,14 +440,24 @@ const App: React.FC = () => {
                 <span className="ml-2 px-2 py-0.5 bg-slate-100 rounded text-[9px] font-black text-slate-500 uppercase">{densityMode} Density</span>
              </div>
           </div>
-          <button
-            onClick={downloadCSV}
-            className="flex items-center gap-2 px-3 py-2 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all"
-            title={`Download ${filteredItems.length} items as CSV`}
-          >
-            <Download size={16} />
-            <span className="text-[10px] font-bold uppercase tracking-wider hidden lg:inline">Export</span>
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setShowImporter(true)}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all"
+              title="Import data (CSV, JSON, ZIP)"
+            >
+              <Upload size={16} />
+              <span className="text-[10px] font-bold uppercase tracking-wider hidden lg:inline">Import</span>
+            </button>
+            <button
+              onClick={downloadCSV}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all"
+              title={`Download ${filteredItems.length} items as CSV`}
+            >
+              <Download size={16} />
+              <span className="text-[10px] font-bold uppercase tracking-wider hidden lg:inline">Export</span>
+            </button>
+          </div>
         </header>
 
         <div className={`flex-1 bg-slate-50/30 ${viewType === 'grid' ? 'overflow-y-auto p-10 lg:p-14' : 'overflow-hidden p-2'}`}>
@@ -643,6 +690,14 @@ const App: React.FC = () => {
           })()}
         </AnimatePresence>
       </main>
+
+      {/* Data Importer */}
+      {showImporter && (
+        <DataLoader
+          onDataLoaded={handleDataLoaded}
+          onCancel={() => setShowImporter(false)}
+        />
+      )}
     </div>
   );
 };
