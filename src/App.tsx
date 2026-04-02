@@ -123,6 +123,15 @@ const App: React.FC = () => {
     return result;
   }, [ITEMS, activeContinuous, rangeMinMax]);
 
+  // Dynamic field value accessor (must be before filteredItems)
+  const getItemValues = (item: Item, field: string): string[] => {
+    const raw = item.fields?.[field] ?? (item as Record<string, unknown>)[field];
+    if (raw === undefined || raw === null || raw === '') return [''];
+    const str = String(raw);
+    if (str.includes(';')) return str.split(';').map(s => s.trim()).filter(Boolean);
+    return [str];
+  };
+
   const filteredItems = useMemo(() => {
     return ITEMS.filter(item => {
       // Dynamic field filters
@@ -163,15 +172,6 @@ const App: React.FC = () => {
   }, [filteredItems.length, viewportSize, zoomLevel]);
 
   // 5. Dynamic Grouping Logic
-  const getItemValues = (item: Item, field: string): string[] => {
-    // Check fields map first (imported data), then known properties
-    const raw = item.fields?.[field] ?? (item as Record<string, unknown>)[field];
-    if (raw === undefined || raw === null || raw === '') return [''];
-    const str = String(raw);
-    // If semicolon-separated, split into multiple values
-    if (str.includes(';')) return str.split(';').map(s => s.trim()).filter(Boolean);
-    return [str];
-  };
 
   const groupKeys = useMemo(() => {
     const countMap: Record<string, number> = {};
