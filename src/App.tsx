@@ -566,7 +566,7 @@ const App: React.FC = () => {
                                     className="bg-white rounded-md shadow-md border border-slate-100 overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all group relative z-0 hover:z-50"
                                     style={{ width: `${cardSize}px`, height: `${cardSize}px` }}
                                   >
-                                    <img src={item.image} alt={item.title} className="w-full h-full object-cover" />
+                                    <ItemImage src={item.image} alt={item.title} category={item.category} className="w-full h-full object-cover" />
                                   </motion.div>
                                 ))}
                               </AnimatePresence>
@@ -653,7 +653,7 @@ const App: React.FC = () => {
 
                 {/* Image */}
                 <div className="lg:w-1/2 h-56 lg:h-auto bg-slate-100 overflow-hidden relative">
-                   <img src={selectedItem.image} alt={selectedItem.title} className="w-full h-full object-cover" />
+                   <ItemImage src={selectedItem.image} alt={selectedItem.title} category={selectedItem.category} className="w-full h-full object-cover" />
                 </div>
 
                 {/* Content */}
@@ -701,7 +701,7 @@ const App: React.FC = () => {
                          {relatedItems.map(ri => (
                            <button key={ri.id} onClick={() => setSelectedItem(ri)}
                              className="w-12 h-12 rounded-lg overflow-hidden border-2 border-transparent hover:border-blue-500 transition-all flex-shrink-0">
-                             <img src={ri.image} alt={ri.title} className="w-full h-full object-cover" />
+                             <ItemImage src={ri.image} alt={ri.title} category={ri.category} className="w-full h-full object-cover" />
                            </button>
                          ))}
                        </div>
@@ -748,7 +748,7 @@ const ItemCard: React.FC<{
     className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-2xl hover:shadow-blue-900/10 hover:-translate-y-2 transition-all duration-500 group cursor-pointer relative"
   >
     <div className={`${densityMode === 'small' ? 'aspect-square' : 'aspect-[4/5]'} relative overflow-hidden bg-slate-50`}>
-      <img src={item.image} alt={item.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+      <ItemImage src={item.image} alt={item.title} category={item.category} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
       
       {densityMode !== 'small' && (
         <div className="absolute top-3 right-3">
@@ -780,5 +780,37 @@ const ItemCard: React.FC<{
     )}
   </motion.div>
 );
+
+// --- Fallback Image Component ---
+const CATEGORY_COLORS: Record<string, string> = {
+  Development: '#3B82F6', Design: '#EC4899', Data: '#10B981',
+  Architecture: '#F59E0B', Security: '#EF4444', Mobile: '#8B5CF6', Cloud: '#06B6D4',
+};
+
+const ItemImage: React.FC<{
+  src: string; alt: string; category?: string; className?: string;
+}> = ({ src, alt, category, className = '' }) => {
+  const [failed, setFailed] = useState(false);
+  const bg = CATEGORY_COLORS[category || ''] || '#64748B';
+  const initials = alt.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+
+  if (!src || failed) {
+    return (
+      <div className={`flex items-center justify-center ${className}`} style={{ background: bg }}>
+        <span className="text-white font-black text-lg opacity-80">{initials}</span>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  );
+};
 
 export default App;
