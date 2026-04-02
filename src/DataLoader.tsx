@@ -127,26 +127,46 @@ const DataLoader: React.FC<DataLoaderProps> = ({ onDataLoaded, onCancel }) => {
         const zip = await JSZip.loadAsync(file);
         const blobs: Record<string, string> = {};
 
-        // Find data file (data/items.csv or data/items.json)
+        // Find data file — handles nested folders (e.g., macOS Finder compress)
+        // Matches: data/items.csv, folder/data/items.csv, or any .csv/.json
         let dataText = '';
         let dataName = '';
-        for (const path of Object.keys(zip.files)) {
-          if (path.startsWith('data/') && (path.endsWith('.csv') || path.endsWith('.json'))) {
+        const allPaths = Object.keys(zip.files)
+          .filter(p => !p.startsWith('__MACOSX') && !p.includes('.DS_Store') && !zip.files[p].dir);
+
+        // Priority 1: path containing /data/ with .csv or .json
+        for (const path of allPaths) {
+          if (path.includes('/data/') && (path.endsWith('.csv') || path.endsWith('.json'))) {
             dataText = await zip.files[path].async('text');
             dataName = path.split('/').pop() || path;
             break;
           }
         }
+        // Priority 2: any .csv or .json at any level
+        if (!dataText) {
+          for (const path of allPaths) {
+            if (path.endsWith('.csv') || path.endsWith('.json')) {
+              dataText = await zip.files[path].async('text');
+              dataName = path.split('/').pop() || path;
+              break;
+            }
+          }
+        }
 
-        // Extract images as blob URLs
-        for (const path of Object.keys(zip.files)) {
-          if (path.startsWith('images/') && !zip.files[path].dir) {
-            const blob = await zip.files[path].async('blob');
-            const url = URL.createObjectURL(blob);
-            const fileName = path.split('/').pop() || path;
-            // Map both "images/001.jpg" and "001.jpg" to the blob URL
-            blobs[path] = url;
-            blobs[fileName] = url;
+        // Extract images — handles nested: images/001.jpg or folder/images/001.jpg
+        for (const path of allPaths) {
+          if (path.includes('/images/') || path.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+            if (!path.includes('/images/') && path.includes('/data/')) continue; // skip data folder
+            try {
+              const blob = await zip.files[path].async('blob');
+              const url = URL.createObjectURL(blob);
+              const fileName = path.split('/').pop() || path;
+              blobs[path] = url;
+              blobs[fileName] = url;
+              // Also map without leading path: "images/001.jpg" -> blob
+              const imgSubpath = path.includes('/images/') ? 'images/' + fileName : fileName;
+              blobs[imgSubpath] = url;
+            } catch { /* skip */ }
           }
         }
 
