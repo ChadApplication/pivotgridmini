@@ -477,6 +477,31 @@ const App: React.FC = () => {
           )}
         </div>
 
+        {/* Info Fields from selected item or description */}
+        {columnMapping?.infoFields && columnMapping.infoFields.length > 0 && selectedItem && (
+          <div className="p-6 border-t border-slate-100 space-y-3 overflow-y-auto max-h-60">
+            <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Info</div>
+            {columnMapping.infoFields.map(field => {
+              const val = selectedItem.fields?.[field];
+              if (!val) return null;
+              return (
+                <div key={field}>
+                  <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{field}</div>
+                  <div className="text-xs text-slate-700 mt-0.5 break-words">{String(val)}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Description */}
+        {columnMapping?.descriptionField && selectedItem?.description && (
+          <div className="p-6 border-t border-slate-100">
+            <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">{columnMapping.descriptionField}</div>
+            <div className="text-xs text-slate-600 leading-relaxed break-words max-h-32 overflow-y-auto">{selectedItem.description}</div>
+          </div>
+        )}
+
         <div className="p-8 bg-slate-50 border-t border-slate-100">
            <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Discovery Stats</div>
            <div className="flex justify-between items-end">

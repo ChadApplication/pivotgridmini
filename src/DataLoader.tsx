@@ -9,6 +9,7 @@ export interface ColumnMapping {
   continuousFields: string[];
   groupableFields: string[];
   displayFields: string[];
+  infoFields: string[];
 }
 
 interface DataLoaderProps {
@@ -86,37 +87,20 @@ const DataLoader: React.FC<DataLoaderProps> = ({ onDataLoaded, onCancel }) => {
   const [continuousFields, setContinuousFields] = useState<string[]>([]);
   const [groupableFields, setGroupableFields] = useState<string[]>([]);
   const [displayFields, setDisplayFields] = useState<string[]>([]);
+  const [infoFields, setInfoFields] = useState<string[]>([]);
 
-  const applyAutoDetect = (headers: string[], rows: Record<string, string>[], name: string) => {
+  const applyColumns = (headers: string[], rows: Record<string, string>[], name: string) => {
     setColumns(headers);
     setRawData(rows);
     setFileName(name);
-
-    const lower = headers.map(h => h.toLowerCase());
-    setTitleField(headers[lower.findIndex(h => h.includes('title') || h.includes('name'))] || headers[0]);
-    setDescriptionField(headers[lower.findIndex(h => h.includes('desc') || h.includes('note') || h.includes('content'))] || '');
-    setImageField(headers[lower.findIndex(h => h.includes('image') || h.includes('img') || h.includes('photo') || h.includes('thumbnail'))] || '');
-    // Auto-detect continuous fields (numeric columns)
-    const autoContinuous = headers.filter((h, i) => {
-      const l = lower[i];
-      if (l.includes('id') || l.includes('image')) return false;
-      // Check if first row value is numeric
-      const sample = rows[0]?.[h] || '';
-      return !isNaN(Number(sample)) && sample !== '';
-    });
-    setContinuousFields(autoContinuous);
-
-    const autoGroup = headers.filter((_, i) => {
-      const l = lower[i];
-      return l.includes('category') || l.includes('tag') || l.includes('author') || l.includes('type') || l.includes('status') || l.includes('group');
-    });
-    setGroupableFields(autoGroup);
-
-    const autoDisplay = headers.filter((_, i) => {
-      const l = lower[i];
-      return !l.includes('id') && !l.includes('image') && !l.includes('img') && !l.includes('thumbnail');
-    });
-    setDisplayFields(autoDisplay);
+    // All fields start empty — user selects everything
+    setTitleField(headers[0] || '');
+    setDescriptionField('');
+    setImageField('');
+    setContinuousFields([]);
+    setGroupableFields([]);
+    setDisplayFields([]);
+    setInfoFields([]);
     setStep(2);
   };
 
@@ -198,7 +182,7 @@ const DataLoader: React.FC<DataLoaderProps> = ({ onDataLoaded, onCancel }) => {
         if (dataText) {
           const { headers, rows } = parseDataFile(dataText, dataName);
           if (headers.length > 0 && rows.length > 0) {
-            applyAutoDetect(headers, rows, file.name);
+            applyColumns(headers, rows, file.name);
           }
         }
       } catch (e) {
@@ -214,7 +198,7 @@ const DataLoader: React.FC<DataLoaderProps> = ({ onDataLoaded, onCancel }) => {
       const text = e.target?.result as string;
       const { headers, rows } = parseDataFile(text, file.name);
       if (headers.length > 0 && rows.length > 0) {
-        applyAutoDetect(headers, rows, file.name);
+        applyColumns(headers, rows, file.name);
       }
       setLoading(false);
     };
@@ -237,6 +221,7 @@ const DataLoader: React.FC<DataLoaderProps> = ({ onDataLoaded, onCancel }) => {
       continuousFields,
       groupableFields,
       displayFields,
+      infoFields,
     }, imageBlobs);
   };
 
@@ -418,6 +403,26 @@ const DataLoader: React.FC<DataLoaderProps> = ({ onDataLoaded, onCancel }) => {
                 className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
                   displayFields.includes(col)
                     ? 'bg-emerald-600 text-white shadow-md'
+                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                }`}
+              >
+                {col}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Info Fields (shown in sidebar) */}
+        <div className="space-y-3 mb-8">
+          <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Info Fields (Sidebar Display)</h3>
+          <div className="flex flex-wrap gap-2">
+            {columns.map(col => (
+              <button
+                key={col}
+                onClick={() => toggleField(col, infoFields, setInfoFields)}
+                className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
+                  infoFields.includes(col)
+                    ? 'bg-violet-600 text-white shadow-md'
                     : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                 }`}
               >
