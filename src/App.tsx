@@ -660,7 +660,8 @@ const App: React.FC = () => {
                       key={item.id} 
                       item={item}
                       densityMode={densityMode}
-                      onClick={() => { setSelectedItem(item); setModalOpen(true); }}
+                      onClick={() => setSelectedItem(item)}
+                      onDoubleClick={() => { setSelectedItem(item); setModalOpen(true); }}
                     />
                   ))}
                 </AnimatePresence>
@@ -714,7 +715,8 @@ const App: React.FC = () => {
                                     animate={{ opacity: 1, scale: 1, y: 0 }}
                                     exit={{ opacity: 0, scale: 0.5, y: 50 }}
                                     transition={{ delay: idx * 0.01 }}
-                                    onClick={() => { setSelectedItem(item); setModalOpen(true); }}
+                                    onClick={() => setSelectedItem(item)}
+                      onDoubleClick={() => { setSelectedItem(item); setModalOpen(true); }}
                                     className="bg-white rounded-md shadow-md border border-slate-100 overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all group relative z-0 hover:z-50"
                                     style={{ width: `${cardSize}px`, height: `${cardSize}px` }}
                                   >
@@ -886,11 +888,12 @@ const App: React.FC = () => {
 };
 
 // --- Semantic Item Card Component ---
-const ItemCard: React.FC<{ 
-  item: Item, 
+const ItemCard: React.FC<{
+  item: Item,
   densityMode: 'large' | 'medium' | 'small',
-  onClick: () => void 
-}> = ({ item, densityMode, onClick }) => (
+  onClick: () => void,
+  onDoubleClick?: () => void
+}> = ({ item, densityMode, onClick, onDoubleClick }) => (
   <motion.div
     layoutId={`item-${item.id}`}
     layout
@@ -898,6 +901,7 @@ const ItemCard: React.FC<{
     animate={{ opacity: 1, scale: 1 }}
     exit={{ opacity: 0, scale: 0.9 }}
     onClick={onClick}
+    onDoubleClick={onDoubleClick}
     className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-2xl hover:shadow-blue-900/10 hover:-translate-y-2 transition-all duration-500 group cursor-pointer relative"
   >
     <div className={`${densityMode === 'small' ? 'aspect-square' : 'aspect-[4/5]'} relative overflow-hidden bg-slate-50`}>
