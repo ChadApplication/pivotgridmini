@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Filter, Grid, LayoutPanelLeft, Search, X, BarChart2, Calendar, Tag, ChevronRight, Hash } from 'lucide-react';
 import { ITEMS, Item } from './data';
@@ -320,39 +320,61 @@ const App: React.FC = () => {
                 style={{ height: `calc(100vh - 140px)`, paddingBottom: '50px' }}
               >
                 {(() => {
+                  const COL_THRESHOLD = 25;
                   const maxCount = Math.max(...groupKeys.map(k => groupedItems[k].length), 1);
+                  const numCols = Math.ceil(maxCount / COL_THRESHOLD);
+                  const effectiveMax = Math.ceil(maxCount / numCols);
                   const availableHeight = viewportSize.height - 140 - 50 - 60;
-                  const maxCardSize = Math.min(80, Math.floor(availableHeight / maxCount));
-                  const cardSize = Math.max(16, maxCardSize);
-                  const peekPerCard = maxCount > 1 ? Math.max(3, (availableHeight - cardSize) / (maxCount - 1)) : cardSize + 4;
+                  const maxCardSize = Math.min(80, Math.floor(availableHeight / effectiveMax));
+                  const cardSize = Math.max(20, maxCardSize);
+                  const peekPerCard = effectiveMax > 1 ? Math.max(3, (availableHeight - cardSize) / (effectiveMax - 1)) : cardSize + 4;
                   const defaultGap = peekPerCard - cardSize;
 
                   return groupKeys.map(key => {
                     const itemsInGroup = groupedItems[key];
-                    const groupGap = itemsInGroup.length <= 1 ? 4 : Math.min(4, defaultGap);
+                    const colWidth = numCols > 1 ? cardSize * numCols + (numCols - 1) * 4 : cardSize;
+
+                    // Split items evenly into columns (all groups use same column count)
+                    const columns: Item[][] = [];
+                    if (numCols > 1) {
+                      const perCol = Math.ceil(itemsInGroup.length / numCols);
+                      for (let c = 0; c < numCols; c++) {
+                        const slice = itemsInGroup.slice(c * perCol, (c + 1) * perCol);
+                        if (slice.length > 0) columns.push(slice);
+                      }
+                    } else {
+                      columns.push(itemsInGroup);
+                    }
+
+                    const colCount = Math.max(...columns.map(c => c.length), 1);
+                    const groupGap = colCount <= 1 ? 4 : Math.min(4, defaultGap);
 
                     return (
-                      <div key={key} className="flex-1 flex flex-col items-center gap-2 h-full justify-end min-w-[40px]" style={{ maxWidth: `${cardSize + 40}px` }}>
-                        <div className="flex flex-col-reverse w-full" style={{ gap: `${groupGap}px` }}>
-                          <AnimatePresence mode="popLayout">
-                            {itemsInGroup.map((item, idx) => (
-                              <motion.div
-                                key={item.id} layoutId={`item-${item.id}`} layout
-                                initial={{ opacity: 0, scale: 0.5, y: 50 }}
-                                animate={{ opacity: 1, scale: 1, y: 0 }}
-                                exit={{ opacity: 0, scale: 0.5, y: 50 }}
-                                transition={{ delay: idx * 0.01 }}
-                                onClick={() => setSelectedItem(item)}
-                                className="bg-white rounded-md shadow-md border border-slate-100 overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all group relative z-0 hover:z-50"
-                                style={{ width: `${cardSize}px`, height: `${cardSize}px` }}
-                              >
-                                 <img src={item.image} alt={item.title} className="w-full h-full object-cover" />
-                              </motion.div>
-                            ))}
-                          </AnimatePresence>
+                      <div key={key} className="flex-1 flex flex-col items-center gap-2 h-full justify-end" style={{ minWidth: `${colWidth + 20}px`, maxWidth: `${colWidth + 40}px` }}>
+                        <div className="flex gap-1 items-end w-full">
+                          {columns.map((colItems, colIdx) => (
+                            <div key={colIdx} className="flex flex-col-reverse flex-1" style={{ gap: `${groupGap}px` }}>
+                              <AnimatePresence mode="popLayout">
+                                {colItems.map((item, idx) => (
+                                  <motion.div
+                                    key={item.id} layoutId={`item-${item.id}`} layout
+                                    initial={{ opacity: 0, scale: 0.5, y: 50 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.5, y: 50 }}
+                                    transition={{ delay: idx * 0.01 }}
+                                    onClick={() => setSelectedItem(item)}
+                                    className="bg-white rounded-md shadow-md border border-slate-100 overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all group relative z-0 hover:z-50"
+                                    style={{ width: `${cardSize}px`, height: `${cardSize}px` }}
+                                  >
+                                    <img src={item.image} alt={item.title} className="w-full h-full object-cover" />
+                                  </motion.div>
+                                ))}
+                              </AnimatePresence>
+                            </div>
+                          ))}
                         </div>
                         <div className="text-center mt-2">
-                           <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest truncate" style={{ width: `${cardSize + 20}px` }}>{key}</div>
+                           <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest truncate" style={{ width: `${colWidth + 20}px` }}>{key}</div>
                            <div className="text-lg font-black text-slate-800">{itemsInGroup.length}</div>
                         </div>
                       </div>

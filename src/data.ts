@@ -7,7 +7,7 @@ export interface Item {
   image: string;
 }
 
-const CATEGORIES = ["Development", "Design", "Data", "Architecture", "Security", "Mobile"];
+const CATEGORIES = ["Development", "Design", "Data", "Architecture", "Security", "Mobile", "Cloud"];
 const AUTHORS = [
   "Dan Abramov", "Lee Robinson", "Kevin Powell", "Matt Perry", "Addy Osmani", 
   "Sarah Drasner", "Kent C. Dodds", "Wes McKinney", "Hadley Wickham", "Edward Tufte",
