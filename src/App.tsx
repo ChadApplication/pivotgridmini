@@ -164,17 +164,47 @@ const App: React.FC = () => {
     clearFilters();
   };
 
-  const downloadCSV = () => {
+  const downloadZip = async () => {
+    const JSZip = (await import('jszip')).default;
+    const zip = new JSZip();
+    const dataFolder = zip.folder('data')!;
+    const imagesFolder = zip.folder('images')!;
+
+    // Build CSV with image filenames (not blob URLs)
     const header = "id,title,description,category,tags,author,year,email,url,image";
-    const rows = filteredItems.map(i =>
-      `${i.id},"${i.title}","${i.description}","${i.category}","${i.tags.join(';')}","${i.author}",${i.year},"${i.email || ''}","${i.url || ''}","${i.image}"`
-    );
-    const csv = [header, ...rows].join("\n");
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
+    const rows = filteredItems.map(i => {
+      const imgName = `${String(i.id).padStart(3, '0')}.jpg`;
+      return `${i.id},"${i.title}","${i.description}","${i.category}","${i.tags.join(';')}","${i.author}",${i.year},"${i.email || ''}","${i.url || ''}","${imgName}"`;
+    });
+    dataFolder.file('items.csv', "\uFEFF" + [header, ...rows].join("\n"));
+
+    // Add images: from blob URLs or fetch from src
+    for (const item of filteredItems) {
+      const imgName = `${String(item.id).padStart(3, '0')}.jpg`;
+      const blobUrl = imageBlobs[item.image] || imageBlobs[imgName];
+
+      if (blobUrl && blobUrl.startsWith('blob:')) {
+        try {
+          const resp = await fetch(blobUrl);
+          const blob = await resp.blob();
+          imagesFolder.file(imgName, blob);
+        } catch { /* skip */ }
+      } else if (item.image && item.image.startsWith('http')) {
+        try {
+          const resp = await fetch(item.image);
+          if (resp.ok) {
+            const blob = await resp.blob();
+            imagesFolder.file(imgName, blob);
+          }
+        } catch { /* skip - external image may fail */ }
+      }
+    }
+
+    const content = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(content);
+    const a = document.createElement('a');
     a.href = url;
-    a.download = `pivotgrid_${filteredItems.length}_items.csv`;
+    a.download = `pivotgrid_${filteredItems.length}_items.zip`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -450,7 +480,7 @@ const App: React.FC = () => {
               <span className="text-[10px] font-bold uppercase tracking-wider hidden lg:inline">Import</span>
             </button>
             <button
-              onClick={downloadCSV}
+              onClick={downloadZip}
               className="flex items-center gap-2 px-3 py-2 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all"
               title={`Download ${filteredItems.length} items as CSV`}
             >
