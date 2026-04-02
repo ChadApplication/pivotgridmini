@@ -9,7 +9,7 @@ const App: React.FC = () => {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [viewType, setViewType] = useState<'grid' | 'group'>('grid');
-  const [groupBy, setGroupBy] = useState<'category' | 'year'>('category');
+  const [groupBy, setGroupBy] = useState<'category' | 'year' | 'author' | 'tag'>('category');
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
 
   // 1. Viewport Size Tracking (Define this first!)
@@ -92,15 +92,30 @@ const App: React.FC = () => {
 
   // 5. Dynamic Grouping Logic
   const groupKeys = useMemo(() => {
-    return groupBy === 'category' ? categories : years.map(String);
-  }, [groupBy, categories, years]);
+    switch (groupBy) {
+      case 'category': return categories;
+      case 'year': return years.map(String);
+      case 'author': return allAuthors;
+      case 'tag': return allTags;
+    }
+  }, [groupBy, categories, years, allAuthors, allTags]);
+
+  const getItemKeys = (item: Item): string[] => {
+    switch (groupBy) {
+      case 'category': return [item.category];
+      case 'year': return [String(item.year)];
+      case 'author': return [item.author];
+      case 'tag': return item.tags;
+    }
+  };
 
   const groupedItems = useMemo(() => {
     const groups: Record<string, Item[]> = {};
-    groupKeys.forEach(key => {
-      groups[key] = filteredItems.filter(item => {
-        const itemKey = groupBy === 'category' ? item.category : String(item.year);
-        return itemKey === key;
+    groupKeys.forEach(key => { groups[key] = []; });
+    filteredItems.forEach(item => {
+      const keys = getItemKeys(item);
+      keys.forEach(key => {
+        if (groups[key]) groups[key].push(item);
       });
     });
     return groups;
@@ -161,6 +176,32 @@ const App: React.FC = () => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
+          </div>
+
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+              <BarChart2 size={14} /> Stack By
+            </h3>
+            <div className="flex flex-wrap gap-1.5">
+              {([
+                { key: 'category', label: 'Category' },
+                { key: 'year', label: 'Year' },
+                { key: 'author', label: 'Author' },
+                { key: 'tag', label: 'Tag' },
+              ] as const).map(opt => (
+                <button
+                  key={opt.key}
+                  onClick={() => { setGroupBy(opt.key); setViewType('group'); }}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
+                    groupBy === opt.key && viewType === 'group'
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="space-y-6">
@@ -356,23 +397,6 @@ const App: React.FC = () => {
                 </button>
              </div>
              
-             {viewType === 'group' && (
-                <div className="flex bg-slate-100 p-1.5 rounded-xl ml-4">
-                  <button 
-                    onClick={() => setGroupBy('category')}
-                    className={`p-2 rounded-lg flex items-center gap-2 px-3 transition-all ${groupBy === 'category' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
-                  >
-                    <Tag size={14}/><span className="text-[10px] font-bold uppercase tracking-wider">By Category</span>
-                  </button>
-                  <button 
-                    onClick={() => setGroupBy('year')}
-                    className={`p-2 rounded-lg flex items-center gap-2 px-3 transition-all ${groupBy === 'year' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
-                  >
-                    <Hash size={14}/><span className="text-[10px] font-bold uppercase tracking-wider">By Year</span>
-                  </button>
-                </div>
-             )}
-
              <div className="h-6 w-px bg-slate-200 mx-2" />
              <div className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
                 Discovery <ChevronRight size={12} /> <span className="text-blue-600">{viewType === 'grid' ? 'Grid' : 'Stacked'}</span>
