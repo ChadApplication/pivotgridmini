@@ -5,7 +5,7 @@ import JSZip from 'jszip';
 export interface ColumnMapping {
   titleField: string;
   imageField: string;
-  yearField: string;
+  continuousFields: string[];
   groupableFields: string[];
   displayFields: string[];
 }
@@ -61,7 +61,7 @@ const DataLoader: React.FC<DataLoaderProps> = ({ onDataLoaded, onCancel }) => {
   // Step 2: mapping state
   const [titleField, setTitleField] = useState('');
   const [imageField, setImageField] = useState('');
-  const [yearField, setYearField] = useState('');
+  const [continuousFields, setContinuousFields] = useState<string[]>([]);
   const [groupableFields, setGroupableFields] = useState<string[]>([]);
   const [displayFields, setDisplayFields] = useState<string[]>([]);
 
@@ -73,7 +73,15 @@ const DataLoader: React.FC<DataLoaderProps> = ({ onDataLoaded, onCancel }) => {
     const lower = headers.map(h => h.toLowerCase());
     setTitleField(headers[lower.findIndex(h => h.includes('title') || h.includes('name'))] || headers[0]);
     setImageField(headers[lower.findIndex(h => h.includes('image') || h.includes('img') || h.includes('photo') || h.includes('thumbnail'))] || '');
-    setYearField(headers[lower.findIndex(h => h.includes('year') || h.includes('date'))] || '');
+    // Auto-detect continuous fields (numeric columns)
+    const autoContinuous = headers.filter((h, i) => {
+      const l = lower[i];
+      if (l.includes('id') || l.includes('image')) return false;
+      // Check if first row value is numeric
+      const sample = rows[0]?.[h] || '';
+      return !isNaN(Number(sample)) && sample !== '';
+    });
+    setContinuousFields(autoContinuous);
 
     const autoGroup = headers.filter((_, i) => {
       const l = lower[i];
@@ -182,7 +190,7 @@ const DataLoader: React.FC<DataLoaderProps> = ({ onDataLoaded, onCancel }) => {
     onDataLoaded(rawData, columns, {
       titleField,
       imageField,
-      yearField,
+      continuousFields,
       groupableFields,
       displayFields,
     }, imageBlobs);
@@ -307,12 +315,22 @@ const DataLoader: React.FC<DataLoaderProps> = ({ onDataLoaded, onCancel }) => {
               </select>
             </div>
             <div>
-              <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Continuous (Range Slider)</label>
-              <select value={yearField} onChange={e => setYearField(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
-                <option value="">None</option>
-                {columns.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
+              <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Continuous (Range Sliders)</label>
+              <div className="flex flex-wrap gap-2 mt-1">
+                {columns.map(col => (
+                  <button
+                    key={col}
+                    onClick={() => toggleField(col, continuousFields, setContinuousFields)}
+                    className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
+                      continuousFields.includes(col)
+                        ? 'bg-amber-600 text-white shadow-md'
+                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                    }`}
+                  >
+                    {col}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>

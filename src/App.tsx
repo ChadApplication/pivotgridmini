@@ -177,7 +177,7 @@ const App: React.FC = () => {
         category: catField ? row[catField] || '' : '',
         tags: tagField ? row[tagField].split(';').map(t => t.trim()).filter(Boolean) : [],
         author: row['author'] || row['name'] || '',
-        year: mapping.yearField ? parseInt(row[mapping.yearField]) || 0 : 0,
+        year: mapping.continuousFields[0] ? parseInt(row[mapping.continuousFields[0]]) || 0 : 0,
         image: resolvedImage,
         email: row['email'] || '',
         url: row['url'] || '',
