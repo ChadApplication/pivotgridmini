@@ -1,16 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Filter, Grid, LayoutPanelLeft, Search, X, BarChart2, Info, User, Calendar, Tag, ChevronRight, Hash } from 'lucide-react';
+import { Filter, Grid, LayoutPanelLeft, Search, X, BarChart2, Calendar, Tag, ChevronRight, Hash } from 'lucide-react';
 import { ITEMS, Item } from './data';
-
-// Custom Layout Icon
-const CustomLayoutIcon = ({ size = 18, className = "" }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-    <line x1="3" y1="9" x2="21" y2="9"></line>
-    <line x1="9" y1="21" x2="9" y2="9"></line>
-  </svg>
-);
 
 const App: React.FC = () => {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -117,7 +108,7 @@ const App: React.FC = () => {
       {/* Sidebar */}
       <aside className="w-80 bg-white border-r border-slate-200 flex flex-col shadow-xl z-20">
         <div className="p-8 border-b border-slate-100 flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-200 cursor-pointer" onClick={() => window.location.reload()}>
+          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-200 cursor-pointer" onClick={() => clearFilters()}>
             <LayoutPanelLeft className="text-white" size={22} />
           </div>
           <div>
@@ -183,9 +174,9 @@ const App: React.FC = () => {
                  <div className="absolute inset-x-0 h-1.5 bg-slate-100 rounded-full" />
                  <motion.div 
                    onPanStart={() => setInitialRange(yearRange)}
-                   onPan={(_, info) => {
+                   onPan={(event, info) => {
                      if (!initialRange) return;
-                     const track = (info.target as HTMLElement).parentElement;
+                     const track = (event.target as HTMLElement).parentElement;
                      if (!track) return;
                      const trackWidth = track.clientWidth;
                      const yearPerPixel = (maxYear - minYear) / trackWidth;
@@ -384,7 +375,7 @@ const App: React.FC = () => {
                    </div>
                    <h2 className="text-4xl font-black text-slate-900 leading-tight mb-4">{selectedItem.title}</h2>
                    <p className="text-xl text-slate-400 font-medium mb-12 italic">Published in {selectedItem.year} by {selectedItem.author}</p>
-                   <div className="space-y-6 flex-1 text-slate-500 text-sm leading-relaxed border-t border-slate-100 pt-10 text-slate-500 leading-relaxed">
+                   <div className="space-y-6 flex-1 text-sm border-t border-slate-100 pt-10 text-slate-500 leading-relaxed">
                       <p>
                         Explore detailed insights about this discovery. In high-density mode, 
                         the system optimizes the display for pattern recognition, while detail view provides the full semantic context.
