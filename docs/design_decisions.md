@@ -1,0 +1,209 @@
+# PivotGrid Mini — Design Decisions
+
+**Date**: 2026-04-02
+**Status**: Open for discussion
+
+---
+
+## 1. Data Structure & Field Design
+
+### Current Schema
+
+```typescript
+interface Item {
+  id: number;
+  title: string;
+  category: string;
+  author: string;
+  year: number;
+  image: string;
+}
+```
+
+### Proposed Extended Schema
+
+```typescript
+interface Item {
+  // Core identity
+  id: string | number;
+  title: string;
+  description?: string;
+
+  // Classification
+  category: string;
+  tags?: string[];              // Multi-tag support for cross-cutting facets
+
+  // Attribution
+  author: string;
+  source?: string;              // Origin/publisher
+
+  // Temporal
+  year: number;
+  date?: string;                // ISO date for finer granularity
+
+  // Visual
+  image: string;                // Primary image URL or local path
+  thumbnailUrl?: string;        // Optimized small version
+  color?: string;               // Fallback color when no image
+
+  // External
+  url?: string;                 // Link to external resource
+
+  // Flexible
+  metadata?: Record<string, string | number | boolean>;  // Custom key-value pairs
+}
+```
+
+### Information Display Strategy
+
+| View Mode | Displayed Fields | Rationale |
+|-----------|-----------------|-----------|
+| **Grid — Large** | image + title + category badge + year | Full card with readable text |
+| **Grid — Medium** | image + title + year | Balanced density |
+| **Grid — Small** | image only (hover: title overlay) | Maximum density, pattern recognition |
+| **Stacked** | image thumbnail only | Bar chart metaphor, quantity focus |
+| **Detail Modal** | All fields | Full semantic context |
+
+### Open Questions
+
+- Should `category` support multiple values (array) or remain single?
+- Should `metadata` fields be filterable in the sidebar?
+- How to handle items with no image?
+
+---
+
+## 2. Image Handling Strategy
+
+### Options Evaluated
+
+| Option | Description | Pros | Cons |
+|--------|-------------|------|------|
+| **A. URL Reference** | `image: "https://..."` | Simple, no storage, scalable | External dependency, offline broken |
+| **B. Local Files** | `image: "./images/001.jpg"` | Offline capable, fast | Storage burden, deployment complexity |
+| **C. Base64 Embedded** | `image: "data:image/..."` | Single-file distribution | JSON bloat, slow parsing, impractical at scale |
+| **D. Hybrid** | URL first → local fallback → color placeholder | Best UX across scenarios | Implementation complexity |
+
+### Recommendation: Option D (Hybrid)
+
+```
+Image Resolution Order:
+1. item.image (URL) → load from network
+2. item.thumbnailUrl (local path) → load from local /images/ folder
+3. item.color → render colored placeholder with initials
+4. Category-based default color → fallback
+```
+
+### Thumbnail Generation
+
+For local images, auto-generate thumbnails at import time:
+- Grid: 300x400px (current picsum size)
+- Stacked: 80x80px (small square)
+- Detail: original size
+
+### Error Handling
+
+- `<img onError>` → show category-colored placeholder with item initials
+- `loading="lazy"` on all images for performance
+- Intersection Observer for stacked view (only load visible cards)
+
+---
+
+## 3. Data Input/Output Strategy
+
+### Options
+
+| Option | Description | Use Case |
+|--------|-------------|----------|
+| **A. File Import Only** | Drag-and-drop CSV/JSON/Excel | Research data visualization, analysis |
+| **B. In-App CRUD Only** | Create/Read/Update/Delete within UI | Collection management, portfolio, catalog |
+| **C. Hybrid (Import + CRUD)** | File import + in-app editing | General purpose, most flexible |
+
+### Option A — File Import
+
+```
+Supported Formats:
+- CSV (.csv) — most universal
+- JSON (.json) — structured, supports nested metadata
+- Excel (.xlsx) — business-friendly (requires xlsx library)
+
+Flow:
+1. User drags file onto app (or clicks import button)
+2. App parses file, validates schema
+3. Auto-detects column mapping (id, title, category, etc.)
+4. Preview → Confirm → Render
+```
+
+**Pros**: Zero backend, instant visualization, works with existing datasets
+**Cons**: No persistence (refresh = data gone unless saved to localStorage)
+
+### Option B — In-App CRUD
+
+```
+Features:
+- Add Item form (title, category, author, year, image URL/upload)
+- Edit Item (click to edit in detail modal)
+- Delete Item (with confirmation)
+- Bulk operations (select multiple → delete/re-categorize)
+
+Storage:
+- localStorage for persistence across sessions
+- Export to CSV/JSON for backup
+```
+
+**Pros**: Full content management, persistent
+**Cons**: More complex UI, storage limits (~5MB localStorage)
+
+### Option C — Hybrid
+
+```
+Import: CSV/JSON/Excel drag-and-drop → populate grid
+Edit: Click item → edit fields in detail modal
+Add: "+" button → new item form
+Delete: Select → delete
+Export: Download filtered/all items as CSV
+Persist: localStorage + file export
+```
+
+**Pros**: Maximum flexibility
+**Cons**: Most complex to implement
+
+### Decision: Option C (Hybrid) — Import + CRUD
+
+Primary use case is file import (research data visualization), but full CRUD is also desired.
+
+**Implementation Phases**:
+- **Phase 1**: CSV/JSON drag-and-drop import + localStorage auto-save
+- **Phase 2**: In-app edit (click item → edit in modal) + delete
+- **Phase 3**: Add new item form + bulk operations + Excel import/export
+
+---
+
+## 4. Storage & Persistence
+
+| Approach | Capacity | Persistence | Sharing |
+|----------|----------|-------------|---------|
+| **In-memory** (current) | Unlimited | None (refresh = reset) | Export only |
+| **localStorage** | ~5MB (~5,000 items) | Browser-local | Export only |
+| **IndexedDB** | ~50MB+ | Browser-local | Export only |
+| **File System API** | Unlimited | User-managed | File sharing |
+| **Backend API** | Unlimited | Server-side | Multi-user |
+
+### Recommendation
+
+For a client-side app without backend:
+1. **Default**: localStorage (auto-save, survives refresh)
+2. **Scale**: IndexedDB if items exceed 5,000
+3. **Backup**: CSV/JSON export always available
+
+---
+
+## 5. Decision Log
+
+| # | Decision | Status | Date |
+|---|----------|--------|------|
+| 1 | Data schema extension | Pending | 2026-04-02 |
+| 2 | Image handling: Hybrid (D) | Proposed | 2026-04-02 |
+| 3 | Data I/O: Option C Hybrid (Import + CRUD) | **Decided** | 2026-04-02 |
+| 4 | Storage: localStorage default | Proposed | 2026-04-02 |
+| 5 | Multi-column threshold: 25 | Decided | 2026-04-02 |
+| 6 | 3-level zoom architecture | Decided | 2026-04-02 |
