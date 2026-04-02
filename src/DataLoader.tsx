@@ -17,31 +17,51 @@ interface DataLoaderProps {
 }
 
 function parseCSV(text: string): { headers: string[]; rows: Record<string, string>[] } {
-  const lines = text.split('\n').filter(l => l.trim());
-  if (lines.length < 2) return { headers: [], rows: [] };
+  // Parse CSV handling multi-line quoted fields, commas in quotes, escaped quotes
+  const records: string[][] = [];
+  let current: string[] = [];
+  let field = '';
+  let inQuotes = false;
 
-  const parseRow = (line: string): string[] => {
-    const result: string[] = [];
-    let current = '';
-    let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+
+    if (inQuotes) {
       if (ch === '"') {
-        inQuotes = !inQuotes;
-      } else if (ch === ',' && !inQuotes) {
-        result.push(current.trim());
-        current = '';
+        if (i + 1 < text.length && text[i + 1] === '"') {
+          field += '"';
+          i++; // skip escaped quote
+        } else {
+          inQuotes = false;
+        }
       } else {
-        current += ch;
+        field += ch;
+      }
+    } else {
+      if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === ',') {
+        current.push(field.trim());
+        field = '';
+      } else if (ch === '\n' || ch === '\r') {
+        if (ch === '\r' && i + 1 < text.length && text[i + 1] === '\n') i++;
+        current.push(field.trim());
+        field = '';
+        if (current.some(c => c !== '')) records.push(current);
+        current = [];
+      } else {
+        field += ch;
       }
     }
-    result.push(current.trim());
-    return result;
-  };
+  }
+  // Last field/row
+  current.push(field.trim());
+  if (current.some(c => c !== '')) records.push(current);
 
-  const headers = parseRow(lines[0]);
-  const rows = lines.slice(1).map(line => {
-    const values = parseRow(line);
+  if (records.length < 2) return { headers: [], rows: [] };
+
+  const headers = records[0];
+  const rows = records.slice(1).map(values => {
     const row: Record<string, string> = {};
     headers.forEach((h, i) => { row[h] = values[i] || ''; });
     return row;
