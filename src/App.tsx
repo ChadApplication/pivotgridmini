@@ -10,6 +10,8 @@ const App: React.FC = () => {
   const [viewType, setViewType] = useState<'grid' | 'group'>('grid');
   const [groupBy, setGroupBy] = useState<string>('category');
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const sidebarItem = selectedItem;
   const [zoomLevel, setZoomLevel] = useState(1.0);
   const [filterSort, setFilterSort] = useState<Record<string, 'name' | 'count'>>({});
   const [groupSort, setGroupSort] = useState<'name-asc' | 'name-desc' | 'count-asc' | 'count-desc'>('name-asc');
@@ -485,11 +487,14 @@ const App: React.FC = () => {
         </div>
 
         {/* Info Fields from selected item or description */}
-        {columnMapping?.infoFields && columnMapping.infoFields.length > 0 && selectedItem && (
+        {columnMapping?.infoFields && columnMapping.infoFields.length > 0 && sidebarItem && (
           <div className="p-6 border-t border-slate-100 space-y-3 overflow-y-auto max-h-60">
-            <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Info</div>
+            <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center justify-between">
+              <span>Info</span>
+              <span className="text-[9px] font-medium text-blue-600 truncate max-w-[150px]">{sidebarItem.title}</span>
+            </div>
             {columnMapping.infoFields.map(field => {
-              const val = selectedItem.fields?.[field];
+              const val = sidebarItem.fields?.[field];
               if (!val) return null;
               return (
                 <div key={field}>
@@ -502,10 +507,10 @@ const App: React.FC = () => {
         )}
 
         {/* Description */}
-        {columnMapping?.descriptionField && selectedItem?.description && (
+        {columnMapping?.descriptionField && sidebarItem?.description && (
           <div className="p-6 border-t border-slate-100">
             <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">{columnMapping.descriptionField}</div>
-            <div className="text-xs text-slate-600 leading-relaxed break-words max-h-32 overflow-y-auto">{selectedItem.description}</div>
+            <div className="text-xs text-slate-600 leading-relaxed break-words max-h-32 overflow-y-auto">{sidebarItem.description}</div>
           </div>
         )}
 
@@ -653,9 +658,9 @@ const App: React.FC = () => {
                   {filteredItems.map((item) => (
                     <ItemCard 
                       key={item.id} 
-                      item={item} 
+                      item={item}
                       densityMode={densityMode}
-                      onClick={() => setSelectedItem(item)} 
+                      onClick={() => { setSelectedItem(item); setModalOpen(true); }}
                     />
                   ))}
                 </AnimatePresence>
@@ -709,7 +714,7 @@ const App: React.FC = () => {
                                     animate={{ opacity: 1, scale: 1, y: 0 }}
                                     exit={{ opacity: 0, scale: 0.5, y: 50 }}
                                     transition={{ delay: idx * 0.01 }}
-                                    onClick={() => setSelectedItem(item)}
+                                    onClick={() => { setSelectedItem(item); setModalOpen(true); }}
                                     className="bg-white rounded-md shadow-md border border-slate-100 overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all group relative z-0 hover:z-50"
                                     style={{ width: `${cardSize}px`, height: `${cardSize}px` }}
                                   >
@@ -745,7 +750,7 @@ const App: React.FC = () => {
           useEffect(() => {
             if (!selectedItem) return;
             const handler = (e: KeyboardEvent) => {
-              if (e.key === 'Escape') setSelectedItem(null);
+              if (e.key === 'Escape') setModalOpen(false);
               if (e.key === 'ArrowLeft' && prevItem) setSelectedItem(prevItem);
               if (e.key === 'ArrowRight' && nextItem) setSelectedItem(nextItem);
             };
@@ -758,7 +763,7 @@ const App: React.FC = () => {
 
         {/* DETAIL MODAL */}
         <AnimatePresence>
-          {selectedItem && (() => {
+          {selectedItem && modalOpen && (() => {
             const currentIdx = filteredItems.findIndex(i => i.id === selectedItem.id);
             const prevItem = currentIdx > 0 ? filteredItems[currentIdx - 1] : null;
             const nextItem = currentIdx < filteredItems.length - 1 ? filteredItems[currentIdx + 1] : null;
@@ -766,7 +771,7 @@ const App: React.FC = () => {
 
             return (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-6 lg:p-16 overflow-hidden">
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedItem(null)}
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setModalOpen(false)}
                 className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
               />
 
@@ -794,7 +799,7 @@ const App: React.FC = () => {
                   <span className="px-3 py-1 bg-black/40 backdrop-blur text-white text-[11px] font-mono rounded-full">
                     {currentIdx + 1} / {filteredItems.length}
                   </span>
-                  <button onClick={() => setSelectedItem(null)} className="w-10 h-10 bg-white/90 backdrop-blur rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-lg transition-all active:scale-90">
+                  <button onClick={() => setModalOpen(false)} className="w-10 h-10 bg-white/90 backdrop-blur rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-900 shadow-lg transition-all active:scale-90">
                     <X size={20} />
                   </button>
                 </div>
