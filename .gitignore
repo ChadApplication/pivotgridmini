@@ -2,4 +2,10 @@ node_modules
 dist
 .DS_Store
 *.local
+_session/
+docs/_settings/
 docs/pivotgrid_test_data/
+docs/아이디어/
+docs/작업지시/
+docs/토의록/
+docs/design_decisions.md
