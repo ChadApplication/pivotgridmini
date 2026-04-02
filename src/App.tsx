@@ -38,15 +38,40 @@ const App: React.FC = () => {
   }, []);
 
   // 2. Year Range State
-  const minYear = useMemo(() => ITEMS.length > 0 ? Math.min(...ITEMS.map(i => i.year)) : 2000, [ITEMS]);
-  const maxYear = useMemo(() => ITEMS.length > 0 ? Math.max(...ITEMS.map(i => i.year)) : 2025, [ITEMS]);
-  const [yearRange, setYearRange] = useState<[number, number]>([2000, 2025]);
+  const [rangeFilters, setRangeFilters] = useState<Record<string, [number, number]>>({});
 
-  // Sync yearRange when ITEMS change
+  // Active continuous fields (from mapping or default)
+  const activeContinuous = useMemo(() => {
+    if (columnMapping) return columnMapping.continuousFields;
+    if (useDemo) return ['year'];
+    return [];
+  }, [columnMapping, useDemo]);
+
+  // Compute min/max per continuous field
+  const rangeMinMax = useMemo(() => {
+    const result: Record<string, { min: number; max: number }> = {};
+    activeContinuous.forEach(field => {
+      const vals = ITEMS.map(i => {
+        const v = i.fields?.[field] ?? (i as Record<string, unknown>)[field];
+        return Number(v) || 0;
+      }).filter(v => !isNaN(v));
+      result[field] = {
+        min: vals.length > 0 ? Math.min(...vals) : 0,
+        max: vals.length > 0 ? Math.max(...vals) : 100,
+      };
+    });
+    return result;
+  }, [ITEMS, activeContinuous]);
+
+  // Sync ranges when data changes
   useEffect(() => {
-    setYearRange([minYear, maxYear]);
-  }, [minYear, maxYear]);
-  const [initialRange, setInitialRange] = useState<[number, number] | null>(null);
+    const newRanges: Record<string, [number, number]> = {};
+    activeContinuous.forEach(field => {
+      const mm = rangeMinMax[field];
+      if (mm) newRanges[field] = [mm.min, mm.max];
+    });
+    setRangeFilters(newRanges);
+  }, [rangeMinMax, activeContinuous]);
 
   const categories = useMemo(() => {
     return Array.from(new Set(ITEMS.map(item => item.category))).sort();
@@ -60,21 +85,24 @@ const App: React.FC = () => {
     return Array.from(new Set(ITEMS.flatMap(item => item.tags))).sort();
   }, [ITEMS]);
 
-  const years = useMemo(() => {
-    const yearsArr = [];
-    for (let y = minYear; y <= maxYear; y++) yearsArr.push(y);
-    return yearsArr;
-  }, [minYear, maxYear]);
-
-  // 3. Histogram & Filtering
-  const histogramData = useMemo(() => {
-    const counts: Record<number, number> = {};
-    for (let y = minYear; y <= maxYear; y++) counts[y] = 0;
-    ITEMS.forEach(item => { counts[item.year]++; });
-    return Object.entries(counts)
-      .map(([year, count]) => ({ year: parseInt(year), count }))
-      .sort((a, b) => a.year - b.year);
-  }, [minYear, maxYear, ITEMS]);
+  // 3. Histogram per continuous field
+  const histogramDataMap = useMemo(() => {
+    const result: Record<string, { value: number; count: number }[]> = {};
+    activeContinuous.forEach(field => {
+      const mm = rangeMinMax[field];
+      if (!mm) return;
+      const counts: Record<number, number> = {};
+      for (let v = mm.min; v <= mm.max; v++) counts[v] = 0;
+      ITEMS.forEach(item => {
+        const val = Number(item.fields?.[field] ?? (item as Record<string, unknown>)[field]) || 0;
+        if (counts[val] !== undefined) counts[val]++;
+      });
+      result[field] = Object.entries(counts)
+        .map(([v, c]) => ({ value: parseInt(v), count: c }))
+        .sort((a, b) => a.value - b.value);
+    });
+    return result;
+  }, [ITEMS, activeContinuous, rangeMinMax]);
 
   const filteredItems = useMemo(() => {
     return ITEMS.filter(item => {
@@ -87,10 +115,13 @@ const App: React.FC = () => {
       const matchesSearch = searchQuery === '' ||
         Object.values(item.fields || {}).some(v => String(v).toLowerCase().includes(searchQuery.toLowerCase())) ||
         item.title.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesYear = item.year >= yearRange[0] && item.year <= yearRange[1];
-      return matchesFilters && matchesSearch && matchesYear;
+      const matchesRanges = Object.entries(rangeFilters).every(([field, [lo, hi]]) => {
+        const val = Number(item.fields?.[field] ?? (item as Record<string, unknown>)[field]) || 0;
+        return val >= lo && val <= hi;
+      });
+      return matchesFilters && matchesSearch && matchesRanges;
     });
-  }, [ITEMS, selectedFilters, searchQuery, yearRange]);
+  }, [ITEMS, selectedFilters, searchQuery, rangeFilters]);
 
   // 4. --- Viewport-Aware Dynamic Grid Scaling Strategy ---
   const { densityMode, cardSize } = useMemo(() => {
@@ -233,7 +264,12 @@ const App: React.FC = () => {
   const clearFilters = () => {
     setSelectedFilters({});
     setSearchQuery('');
-    setYearRange([minYear, maxYear]);
+    const newRanges: Record<string, [number, number]> = {};
+    activeContinuous.forEach(field => {
+      const mm = rangeMinMax[field];
+      if (mm) newRanges[field] = [mm.min, mm.max];
+    });
+    setRangeFilters(newRanges);
   };
 
   return (
@@ -291,79 +327,69 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                <Calendar size={14} /> Publication Year
-              </h3>
-              <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded tracking-tighter">
-                {yearRange[0]} — {yearRange[1]}
-              </span>
-            </div>
-            
-            <div className="px-1 pt-10 pb-2 relative group">
-              <div className="absolute top-0 inset-x-1 h-10 flex items-end gap-[2px] opacity-30 group-hover:opacity-50 transition-opacity">
-                {histogramData.map((d) => (
-                  <div 
-                    key={d.year} 
-                    className={`flex-1 rounded-t-[2px] transition-all duration-500 ${d.year >= yearRange[0] && d.year <= yearRange[1] ? 'bg-blue-600' : 'bg-slate-300'}`}
-                    style={{ height: `${(d.count / Math.max(1, ...histogramData.map(h => h.count))) * 100}%` }}
-                  />
-                ))}
+          {activeContinuous.map(field => {
+            const mm = rangeMinMax[field];
+            const range = rangeFilters[field] || [mm?.min || 0, mm?.max || 100];
+            const histogram = histogramDataMap[field] || [];
+            const maxCount = Math.max(1, ...histogram.map(h => h.count));
+            if (!mm || mm.min === mm.max) return null;
+
+            return (
+              <div key={field} className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                    <Calendar size={14} /> {field}
+                  </h3>
+                  <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded tracking-tighter">
+                    {range[0]} — {range[1]}
+                  </span>
+                </div>
+                <div className="px-1 pt-10 pb-2 relative group">
+                  <div className="absolute top-0 inset-x-1 h-10 flex items-end gap-[2px] opacity-30 group-hover:opacity-50 transition-opacity">
+                    {histogram.map((d) => (
+                      <div
+                        key={d.value}
+                        className={`flex-1 rounded-t-[2px] transition-all duration-500 ${d.value >= range[0] && d.value <= range[1] ? 'bg-blue-600' : 'bg-slate-300'}`}
+                        style={{ height: `${(d.count / maxCount) * 100}%` }}
+                      />
+                    ))}
+                  </div>
+                  <div className="relative h-6 flex items-center">
+                    <input
+                      type="range" min={mm.min} max={mm.max} value={range[0]}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value);
+                        setRangeFilters(prev => ({ ...prev, [field]: [Math.min(val, range[1] - 1), range[1]] }));
+                      }}
+                      className="range-slider-input absolute w-full h-1.5 bg-transparent appearance-none cursor-pointer accent-blue-600 pointer-events-auto"
+                      style={{ zIndex: range[0] < mm.min + (mm.max - mm.min) / 2 ? 50 : 30 }}
+                    />
+                    <input
+                      type="range" min={mm.min} max={mm.max} value={range[1]}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value);
+                        setRangeFilters(prev => ({ ...prev, [field]: [range[0], Math.max(val, range[0] + 1)] }));
+                      }}
+                      className="range-slider-input absolute w-full h-1.5 bg-transparent appearance-none cursor-pointer accent-blue-600 pointer-events-auto"
+                      style={{ zIndex: range[1] > mm.max - (mm.max - mm.min) / 2 ? 50 : 30 }}
+                    />
+                    <div className="absolute inset-x-0 h-1.5 bg-slate-100 rounded-full" />
+                    <div
+                      className="absolute h-1.5 bg-blue-600 rounded-full shadow-[0_0_10px_rgba(37,99,235,0.3)] z-10"
+                      style={{
+                        left: `${((range[0] - mm.min) / Math.max(1, mm.max - mm.min)) * 100}%`,
+                        right: `${100 - ((range[1] - mm.min) / Math.max(1, mm.max - mm.min)) * 100}%`
+                      }}
+                    />
+                  </div>
+                  <div className="flex justify-between mt-2 text-[9px] font-bold text-slate-300 tracking-widest uppercase">
+                    <span>{mm.min}</span>
+                    <span>{mm.max}</span>
+                  </div>
+                </div>
               </div>
-              
-              <div className="relative h-6 flex items-center">
-                 <input 
-                   type="range" min={minYear} max={maxYear} value={yearRange[0]}
-                   onChange={(e) => {
-                     const val = parseInt(e.target.value);
-                     setYearRange([Math.min(val, yearRange[1] - 1), yearRange[1]]);
-                   }}
-                   className="range-slider-input absolute w-full h-1.5 bg-transparent appearance-none cursor-pointer accent-blue-600 pointer-events-auto"
-                   style={{ zIndex: yearRange[0] < minYear + (maxYear - minYear) / 2 ? 50 : 30 }}
-                 />
-                 <input 
-                   type="range" min={minYear} max={maxYear} value={yearRange[1]}
-                   onChange={(e) => {
-                     const val = parseInt(e.target.value);
-                     setYearRange([yearRange[0], Math.max(val, yearRange[0] + 1)]);
-                   }}
-                   className="range-slider-input absolute w-full h-1.5 bg-transparent appearance-none cursor-pointer accent-blue-600 pointer-events-auto"
-                   style={{ zIndex: yearRange[1] > maxYear - (maxYear - minYear) / 2 ? 50 : 30 }}
-                 />
-                 <div className="absolute inset-x-0 h-1.5 bg-slate-100 rounded-full" />
-                 <motion.div 
-                   onPanStart={() => setInitialRange(yearRange)}
-                   onPan={(event, info) => {
-                     if (!initialRange) return;
-                     const track = (event.target as HTMLElement).parentElement;
-                     if (!track) return;
-                     const trackWidth = track.clientWidth;
-                     const yearPerPixel = (maxYear - minYear) / trackWidth;
-                     const deltaYears = Math.round(info.offset.x * yearPerPixel);
-                     if (deltaYears !== 0) {
-                        const rangeSpan = initialRange[1] - initialRange[0];
-                        let newMin = initialRange[0] + deltaYears;
-                        let newMax = newMin + rangeSpan;
-                        if (newMin < minYear) { newMin = minYear; newMax = minYear + rangeSpan; }
-                        else if (newMax > maxYear) { newMax = maxYear; newMin = maxYear - rangeSpan; }
-                        setYearRange([newMin, newMax]);
-                     }
-                   }}
-                   onPanEnd={() => setInitialRange(null)}
-                   className="absolute h-1.5 bg-blue-600 rounded-full shadow-[0_0_10px_rgba(37,99,235,0.3)] z-20 cursor-grab active:cursor-grabbing touch-none" 
-                   style={{ 
-                     left: `${((yearRange[0] - minYear) / Math.max(1, maxYear - minYear)) * 100}%`,
-                     right: `${100 - ((yearRange[1] - minYear) / Math.max(1, maxYear - minYear)) * 100}%`
-                   }}
-                 />
-              </div>
-              <div className="flex justify-between mt-2 text-[9px] font-bold text-slate-300 tracking-widest uppercase">
-                <span>{minYear}</span>
-                <span>{maxYear}</span>
-              </div>
-            </div>
-          </div>
+            );
+          })}
 
           {groupableFields.map(field => {
             const uniqueValues = Array.from(new Set(
