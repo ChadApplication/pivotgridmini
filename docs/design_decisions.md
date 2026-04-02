@@ -209,6 +209,7 @@ For a client-side app without backend:
 | 6 | 3-level zoom architecture | Decided | 2026-04-02 |
 | 7 | 2-step data loading (load → column role mapping) | **Decided** | 2026-04-02 |
 | 8 | Cmd/Ctrl + scroll zoom + zoom slider | **Decided** | 2026-04-02 |
+| 9 | Dummy variable group detection (prefix-based OR groups) | **Planned** | 2026-04-02 |
 
 ---
 
@@ -278,3 +279,53 @@ PivotGrid View
 - Detail modal shows all "display" fields
 - Year histogram uses the designated "year" column
 - Schema config persists in localStorage so re-upload of same format auto-maps
+
+---
+
+## 7. Dummy Variable Group Detection (Planned)
+
+### Problem
+
+Datasets with dummy-encoded columns (0/1) that share a common prefix (e.g., `DT추진부서_전담조직`, `DT추진부서_전담인력`) are treated as independent filters with AND logic. Selecting 1 in two dummy columns from the same group yields 0 results because no single row has both = 1.
+
+### Current Filter Logic
+
+- Same field, multiple values: **OR** (correct)
+- Different fields: **AND** (correct for independent concepts, incorrect for dummy groups)
+
+### Normal Data: Works Correctly
+
+| Scenario | Logic | Status |
+|----------|-------|:------:|
+| Same field multi-select (industry: A, B) | OR | OK |
+| Cross-field (industry + region) | AND | OK |
+| Search + filter | AND | OK |
+| Range slider + filter | AND | OK |
+| Multi-value field (tags: React;TS) | OR | OK |
+
+### Dummy Variable Problem
+
+When columns share a prefix and contain only 0/1:
+- `DT추진부서_전담조직=1` AND `DT추진부서_전담인력=1` → 0 results (should be OR)
+- `업종_기계금속=1` AND `업종_전기전자=1` → 0 results (mutually exclusive)
+
+### Proposed Solution
+
+**Step 1: Auto-detect at import time**
+- Scan for columns sharing prefix (split by `_`)
+- Check if values are only 0/1
+- Group them: `{prefix: "DT추진부서", columns: ["전담조직","전담인력","겸직인력","추후확보"]}`
+
+**Step 2: Merge into single filter**
+- Instead of 4 separate 0/1 filters, show one "DT추진부서" filter with 4 checkbox values
+- Selecting "전담조직" = filtering rows where `DT추진부서_전담조직 = 1`
+- Selecting multiple = OR within group
+
+**Step 3: User override**
+- Toggle OR/AND per group in Map Columns UI
+
+### Detection Heuristics
+
+1. Column name prefix match (`_` separator)
+2. Only 0/1 values in column
+3. Mutual exclusivity check (max one 1 per row in group → exclusive)
