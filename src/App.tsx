@@ -337,9 +337,16 @@ const App: React.FC = () => {
           </div>
 
           <div className="space-y-3">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
-              <BarChart2 size={14} /> Stack By
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                <BarChart2 size={14} /> Stack By
+              </h3>
+              {viewType === 'group' && (
+                <button onClick={() => setViewType('grid')} className="text-[10px] font-bold text-blue-600 hover:text-blue-700 transition-colors">
+                  RESET
+                </button>
+              )}
+            </div>
             <div className="flex flex-wrap gap-1.5">
               {groupableFields.map(field => (
                 <button
@@ -550,25 +557,23 @@ const App: React.FC = () => {
           </div>
           <div className="flex items-center gap-2">
             {viewType === 'group' && (
-              <div className="flex items-center bg-slate-100 rounded-xl p-0.5">
-                {([
-                  { key: 'name-asc', label: 'A↑' },
-                  { key: 'name-desc', label: 'A↓' },
-                  { key: 'count-asc', label: '#↑' },
-                  { key: 'count-desc', label: '#↓' },
-                ] as const).map(opt => (
-                  <button
-                    key={opt.key}
-                    onClick={() => setGroupSort(opt.key)}
-                    className={`px-2 py-1 rounded-lg text-[9px] font-bold transition-all ${
-                      groupSort === opt.key
-                        ? 'bg-white shadow-sm text-blue-600'
-                        : 'text-slate-400 hover:text-slate-600'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+              <div className="flex items-center bg-slate-100 rounded-xl p-0.5 gap-0.5">
+                <button
+                  onClick={() => setGroupSort(prev => prev === 'name-asc' ? 'name-desc' : 'name-asc')}
+                  className={`px-2.5 py-1 rounded-lg text-[9px] font-bold transition-all ${
+                    groupSort.startsWith('name') ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  A-Z {groupSort === 'name-asc' ? '↑' : groupSort === 'name-desc' ? '↓' : ''}
+                </button>
+                <button
+                  onClick={() => setGroupSort(prev => prev === 'count-desc' ? 'count-asc' : 'count-desc')}
+                  className={`px-2.5 py-1 rounded-lg text-[9px] font-bold transition-all ${
+                    groupSort.startsWith('count') ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  # {groupSort === 'count-asc' ? '↑' : groupSort === 'count-desc' ? '↓' : ''}
+                </button>
               </div>
             )}
             <div className="flex items-center gap-1.5 bg-slate-100 rounded-xl px-2 py-1">
