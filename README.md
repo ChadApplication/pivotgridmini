@@ -2,39 +2,75 @@
 
 A modern reimagination of Microsoft Silverlight PivotViewer, built with React + Vite + Tailwind CSS + Framer Motion.
 
-## Screenshots
+## Current Version: v1.2.0
 
-### Grid View — Small Density (200 items)
+### What It Does
 
-All 200 items displayed in a high-density grid. Card size auto-scales based on viewport area and item count.
+PivotGrid Mini visualizes collections of items as interactive, filterable card grids with two view modes:
 
-![Grid View](docs/screenshots/01_grid_view.png)
+- **Grid View** — Cards arranged in a responsive grid, auto-scaled to viewport
+- **Stacked View** — Bar-chart style stacking by category or year, cards sized to fit viewport ceiling
 
-### Detail Modal
+### Features
 
-Click any card to open a full detail view with smooth layout animation (`layoutId` transition).
+| Feature | Description |
+|---------|-------------|
+| **Viewport-Aware Scaling** | Card size adapts to screen dimensions and item count using `sqrt(area * 0.8 / N)` |
+| **Dynamic Stacked View** | Tallest stack auto-fits to viewport ceiling. Responds to browser zoom (67%~125%) |
+| **Auto Multi-Column** | Stacks with 25+ items auto-split into 2/3/4 columns. All groups use same column count for fair height comparison |
+| **3-Level Semantic Disclosure** | Large (full info), Medium (title + year), Small (image only, hover overlay) |
+| **Faceted Navigation** | Category checkboxes + histogram range slider for publication year |
+| **FLIP Animations** | Framer Motion `layoutId` for seamless transitions between grid, stacked, and detail views |
+| **Detail Modal** | Click any card for full detail view with smooth layout animation |
 
-![Detail Modal](docs/screenshots/02_detail_modal.png)
+## Strengths
 
-### Stacked View — By Category
+1. **True PivotViewer experience** — The only modern open-source reimagination of Microsoft's PivotViewer concept
+2. **Zero-scroll stacked view** — Bar chart fits within viewport without scrolling, dynamically adjusts to any zoom level
+3. **Proportional multi-column** — When data exceeds 25 per group, all groups uniformly switch to N-column layout preserving accurate height comparison
+4. **Smooth animations** — `layoutId` enables seamless card transitions between grid, stack, and modal views
+5. **No backend required** — Pure client-side, deployable as static site
 
-Items grouped by category in a bar-chart style layout. Year range filtered to 2015–2017, showing 31 items across 6 categories.
+## Limitations
 
-![Stacked by Category](docs/screenshots/03_stacked_by_category.png)
+| Limitation | Description | Planned Solution |
+|-----------|-------------|-----------------|
+| **Scale ceiling ~500 items** | Beyond 500 items, card sizes become too small to identify. Multi-column helps but has limits | `scale/large` branch: Level 1 Overview with color bars |
+| **No zoom interaction** | Cannot zoom into a stack to see individual cards larger | `scale/medium` branch: hover-to-expand stacks |
+| **Random demo data** | Data regenerates on each reload (non-deterministic) | Seeded PRNG or static dataset |
+| **No data import** | Hardcoded demo items only, no CSV/JSON import | Future: drag-and-drop data loading |
+| **Single-item Q3 self-report** | External image dependency (picsum.photos) — broken images if offline | Fallback placeholder images |
+| **No deep zoom** | Unlike original PivotViewer, no semantic zoom from overview to detail | `scale/large` branch |
 
-### Stacked View — By Year
+## Architecture: 3-Level Zoom (Planned)
 
-Items grouped by publication year. Negative-margin stacking keeps tall columns within viewport bounds.
+```
+┌─────────────────────────────────────────────────────┐
+│  Level 1 — Overview          [scale/large branch]   │
+│  Color bars, height = count                         │
+│  Handles 1,000 ~ 10,000+ items                      │
+│  Click → drill down to Level 2                      │
+├─────────────────────────────────────────────────────┤
+│  Level 2 — Stack             [scale/medium branch]  │
+│  Individual cards, overlap stacking                 │
+│  25/col auto-split, multi-column                    │
+│  Handles 200 ~ 500 items  ← CURRENT                │
+│  Click card → Level 3                               │
+├─────────────────────────────────────────────────────┤
+│  Level 3 — Detail            [scale/small branch]   │
+│  Full modal with image, metadata, description       │
+│  Single item focus  ← CURRENT                       │
+└─────────────────────────────────────────────────────┘
+```
 
-![Stacked by Year](docs/screenshots/04_stacked_by_year.png)
+### Branch Status
 
-## Features
-
-- **Viewport-Aware Dynamic Scaling** — Card size adapts to screen dimensions and item count using `sqrt(area * 0.8 / N)` formula
-- **3-Level Semantic Disclosure** — Large (full info), Medium (title + year), Small (image only, hover overlay)
-- **Faceted Navigation** — Category checkboxes + histogram range slider for publication year
-- **Stacked View** — Group by category or year with adaptive overlap stacking
-- **FLIP Animations** — Framer Motion `layoutId` for seamless transitions between grid, stacked, and detail views
+| Branch | Level | Status | Data Scale |
+|--------|-------|--------|-----------|
+| `main` | 2 + 3 | Stable | ~200-500 items |
+| `scale/small` | 3 (Detail) | Planned | Enhanced detail modal |
+| `scale/medium` | 2 (Stack) | Planned | Hover-expand, 500+ optimization |
+| `scale/large` | 1 (Overview) | Planned | Color bars, 1000+ items |
 
 ## Tech Stack
 
@@ -54,15 +90,18 @@ npm install
 npm run dev
 ```
 
-## Roadmap
+Or via the project control script:
 
-See [docs/development_roadmap.md](docs/development_roadmap.md) for the full implementation plan, including:
+```bash
+./run.sh start    # Start dev server
+./run.sh stop     # Stop dev server
+./run.sh status   # Check server status
+```
 
-- Multi-level sorting
-- CSV/Excel drag-and-drop data import
-- Virtualization for 1000+ items
-- Semantic zoom (Deep Zoom style)
+## License
 
-## Architecture
+MIT
 
-See [docs/dynamic_layout_strategy.md](docs/dynamic_layout_strategy.md) for the viewport-aware scaling strategy.
+## Author
+
+Chungil (Chad) Chae — Wenzhou-Kean University
