@@ -421,11 +421,18 @@ const App: React.FC = () => {
 
           {groupableFields.map(field => {
             const sortMode = filterSort[field] || 'name';
-            const countMap: Record<string, number> = {};
+            // All possible values from full data
+            const allValues = new Set<string>();
             ITEMS.forEach(item => {
-              getItemValues(item, field).forEach(v => { if (v) countMap[v] = (countMap[v] || 0) + 1; });
+              getItemValues(item, field).forEach(v => { if (v) allValues.add(v); });
             });
-            const uniqueValues = Object.keys(countMap).sort((a, b) => {
+            // Counts from filtered data
+            const countMap: Record<string, number> = {};
+            allValues.forEach(v => { countMap[v] = 0; });
+            filteredItems.forEach(item => {
+              getItemValues(item, field).forEach(v => { if (v && countMap[v] !== undefined) countMap[v]++; });
+            });
+            const uniqueValues = Array.from(allValues).sort((a, b) => {
               if (sortMode === 'count') return countMap[b] - countMap[a];
               return a.localeCompare(b);
             });
@@ -465,7 +472,7 @@ const App: React.FC = () => {
                         {val}
                       </span>
                       <span className="ml-auto text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-400 rounded-full font-bold shrink-0">
-                        {ITEMS.filter(i => getItemValues(i, field).includes(val)).length}
+                        {filteredItems.filter(i => getItemValues(i, field).includes(val)).length}
                       </span>
                     </label>
                   ))}
