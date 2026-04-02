@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Filter, Grid, LayoutPanelLeft, Search, X, BarChart2, Calendar, Tag, ChevronRight, ChevronLeft, Hash, User, Download, Upload } from 'lucide-react';
+import { Filter, Grid, LayoutPanelLeft, Search, X, BarChart2, Calendar, Tag, ChevronRight, ChevronLeft, Hash, User, Download, Upload, ZoomIn, ZoomOut } from 'lucide-react';
 import { ITEMS as DEFAULT_ITEMS, Item } from './data';
 import DataLoader, { ColumnMapping } from './DataLoader';
 
@@ -10,6 +10,7 @@ const App: React.FC = () => {
   const [viewType, setViewType] = useState<'grid' | 'group'>('grid');
   const [groupBy, setGroupBy] = useState<string>('category');
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
+  const [zoomLevel, setZoomLevel] = useState(1.0);
   const [showImporter, setShowImporter] = useState(false);
   const [importedItems, setImportedItems] = useState<Item[] | null>(null);
   const [imageBlobs, setImageBlobs] = useState<Record<string, string>>({});
@@ -35,6 +36,18 @@ const App: React.FC = () => {
     const handleResize = () => setViewportSize({ width: window.innerWidth, height: window.innerHeight });
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Cmd/Ctrl + scroll zoom
+  useEffect(() => {
+    const handler = (e: WheelEvent) => {
+      if (e.metaKey || e.ctrlKey) {
+        e.preventDefault();
+        setZoomLevel(prev => Math.min(3.0, Math.max(0.3, prev + (e.deltaY > 0 ? -0.05 : 0.05))));
+      }
+    };
+    window.addEventListener('wheel', handler, { passive: false });
+    return () => window.removeEventListener('wheel', handler);
   }, []);
 
   // 2. Year Range State
@@ -126,19 +139,19 @@ const App: React.FC = () => {
   // 4. --- Viewport-Aware Dynamic Grid Scaling Strategy ---
   const { densityMode, cardSize } = useMemo(() => {
     const n = Math.max(1, filteredItems.length);
-    const contentWidth = Math.max(400, viewportSize.width - 320); 
+    const contentWidth = Math.max(400, viewportSize.width - 320);
     const contentHeight = Math.max(400, viewportSize.height - 80);
     const availableArea = contentWidth * contentHeight;
-    const idealSide = Math.sqrt((availableArea * 0.8) / n);
-    
+    const idealSide = Math.sqrt((availableArea * 0.8) / n) * zoomLevel;
+
     if (idealSide > 220 || n < 12) {
-      return { densityMode: 'large' as const, cardSize: Math.min(300, Math.max(220, idealSide)) };
+      return { densityMode: 'large' as const, cardSize: Math.min(500, Math.max(220, idealSide)) };
     }
     if (idealSide > 120 || n < 60) {
-      return { densityMode: 'medium' as const, cardSize: Math.min(220, Math.max(130, idealSide)) };
+      return { densityMode: 'medium' as const, cardSize: Math.min(300, Math.max(100, idealSide)) };
     }
-    return { densityMode: 'small' as const, cardSize: Math.min(130, Math.max(75, idealSide)) };
-  }, [filteredItems.length, viewportSize]);
+    return { densityMode: 'small' as const, cardSize: Math.min(200, Math.max(40, idealSide)) };
+  }, [filteredItems.length, viewportSize, zoomLevel]);
 
   // 5. Dynamic Grouping Logic
   const getItemValues = (item: Item, field: string): string[] => {
@@ -468,7 +481,24 @@ const App: React.FC = () => {
                 <span className="ml-2 px-2 py-0.5 bg-slate-100 rounded text-[9px] font-black text-slate-500 uppercase">{densityMode} Density</span>
              </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 bg-slate-100 rounded-xl px-2 py-1">
+              <button onClick={() => setZoomLevel(prev => Math.max(0.3, prev - 0.15))} className="p-1 rounded-lg text-slate-400 hover:text-slate-700 transition-colors">
+                <ZoomOut size={14} />
+              </button>
+              <input
+                type="range" min={30} max={300} value={Math.round(zoomLevel * 100)}
+                onChange={(e) => setZoomLevel(parseInt(e.target.value) / 100)}
+                className="w-16 h-1 accent-blue-600 cursor-pointer"
+              />
+              <button onClick={() => setZoomLevel(prev => Math.min(3.0, prev + 0.15))} className="p-1 rounded-lg text-slate-400 hover:text-slate-700 transition-colors">
+                <ZoomIn size={14} />
+              </button>
+              <button onClick={() => setZoomLevel(1.0)} className="text-[9px] font-bold text-slate-400 hover:text-blue-600 px-1 transition-colors">
+                {Math.round(zoomLevel * 100)}%
+              </button>
+            </div>
+            <div className="h-5 w-px bg-slate-200" />
             <button
               onClick={() => setShowImporter(true)}
               className="flex items-center gap-2 px-3 py-2 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all"

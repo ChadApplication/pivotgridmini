@@ -208,6 +208,7 @@ For a client-side app without backend:
 | 5 | Multi-column threshold: 25 | Decided | 2026-04-02 |
 | 6 | 3-level zoom architecture | Decided | 2026-04-02 |
 | 7 | 2-step data loading (load → column role mapping) | **Decided** | 2026-04-02 |
+| 8 | Cmd/Ctrl + scroll zoom + zoom slider | **Decided** | 2026-04-02 |
 
 ---
 
