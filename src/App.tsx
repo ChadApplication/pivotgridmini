@@ -32,22 +32,27 @@ const App: React.FC = () => {
   }, []);
 
   // 2. Year Range State
-  const minYear = useMemo(() => Math.min(...ITEMS.map(i => i.year)), []);
-  const maxYear = useMemo(() => Math.max(...ITEMS.map(i => i.year)), []);
-  const [yearRange, setYearRange] = useState<[number, number]>([minYear, maxYear]);
+  const minYear = useMemo(() => ITEMS.length > 0 ? Math.min(...ITEMS.map(i => i.year)) : 2000, [ITEMS]);
+  const maxYear = useMemo(() => ITEMS.length > 0 ? Math.max(...ITEMS.map(i => i.year)) : 2025, [ITEMS]);
+  const [yearRange, setYearRange] = useState<[number, number]>([2000, 2025]);
+
+  // Sync yearRange when ITEMS change
+  useEffect(() => {
+    setYearRange([minYear, maxYear]);
+  }, [minYear, maxYear]);
   const [initialRange, setInitialRange] = useState<[number, number] | null>(null);
 
   const categories = useMemo(() => {
     return Array.from(new Set(ITEMS.map(item => item.category))).sort();
-  }, []);
+  }, [ITEMS]);
 
   const allAuthors = useMemo(() => {
     return Array.from(new Set(ITEMS.map(item => item.author))).sort();
-  }, []);
+  }, [ITEMS]);
 
   const allTags = useMemo(() => {
     return Array.from(new Set(ITEMS.flatMap(item => item.tags))).sort();
-  }, []);
+  }, [ITEMS]);
 
   const years = useMemo(() => {
     const yearsArr = [];
@@ -63,7 +68,7 @@ const App: React.FC = () => {
     return Object.entries(counts)
       .map(([year, count]) => ({ year: parseInt(year), count }))
       .sort((a, b) => a.year - b.year);
-  }, [minYear, maxYear]);
+  }, [minYear, maxYear, ITEMS]);
 
   const filteredItems = useMemo(() => {
     return ITEMS.filter(item => {
@@ -78,7 +83,7 @@ const App: React.FC = () => {
       const matchesYear = item.year >= yearRange[0] && item.year <= yearRange[1];
       return matchesCategory && matchesAuthor && matchesTags && matchesSearch && matchesYear;
     });
-  }, [selectedCategories, selectedAuthors, selectedTags, searchQuery, yearRange]);
+  }, [ITEMS, selectedCategories, selectedAuthors, selectedTags, searchQuery, yearRange]);
 
   // 4. --- Viewport-Aware Dynamic Grid Scaling Strategy ---
   const { densityMode, cardSize } = useMemo(() => {
