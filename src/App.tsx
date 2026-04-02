@@ -290,7 +290,7 @@ const App: React.FC = () => {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-10 lg:p-14 bg-slate-50/30">
+        <div className={`flex-1 bg-slate-50/30 ${viewType === 'grid' ? 'overflow-y-auto p-10 lg:p-14' : 'overflow-hidden p-2'}`}>
           <AnimatePresence mode="wait">
             {viewType === 'grid' ? (
               <motion.div 
@@ -316,13 +316,14 @@ const App: React.FC = () => {
             ) : (
               <motion.div
                 key="group" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="flex gap-8 h-full items-end pb-16 overflow-x-auto px-4"
-                style={{ minHeight: 'calc(100vh - 200px)' }}
+                className="flex gap-8 h-full items-end overflow-x-auto px-4"
+                style={{ height: `calc(100vh - 140px)`, paddingBottom: '50px' }}
               >
                 {(() => {
                   const maxCount = Math.max(...groupKeys.map(k => groupedItems[k].length), 1);
-                  const availableHeight = viewportSize.height - 320;
-                  const cardSize = Math.max(16, Math.min(80, Math.floor(availableHeight / Math.max(maxCount * 0.28, 1))));
+                  const availableHeight = viewportSize.height - 140 - 50 - 60;
+                  const maxCardSize = Math.min(80, Math.floor(availableHeight / maxCount));
+                  const cardSize = Math.max(16, maxCardSize);
                   const peekPerCard = maxCount > 1 ? Math.max(3, (availableHeight - cardSize) / (maxCount - 1)) : cardSize + 4;
                   const defaultGap = peekPerCard - cardSize;
 
