@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Filter, Grid, LayoutPanelLeft, Search, X, BarChart2, Calendar, Tag, ChevronRight, Hash } from 'lucide-react';
 import { ITEMS, Item } from './data';
@@ -314,40 +314,50 @@ const App: React.FC = () => {
                 </AnimatePresence>
               </motion.div>
             ) : (
-              <motion.div 
+              <motion.div
                 key="group" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="flex gap-12 h-full min-h-[600px] items-end pb-20 overflow-x-auto px-4"
+                className="flex gap-8 h-full items-end pb-16 overflow-x-auto px-4"
+                style={{ minHeight: 'calc(100vh - 200px)' }}
               >
-                {groupKeys.map(key => {
-                  const itemsInGroup = groupedItems[key];
-                  const overlap = itemsInGroup.length > 15 ? (120 / itemsInGroup.length) : 8;
-                  
-                  return (
-                    <div key={key} className="flex-1 flex flex-col items-center gap-4 h-full justify-end min-w-[60px] max-w-[120px]">
-                      <div className="flex flex-col-reverse w-full" style={{ gap: itemsInGroup.length > 15 ? `-${85 - overlap}px` : '6px' }}>
-                        <AnimatePresence mode="popLayout">
-                          {itemsInGroup.map((item, idx) => (
-                            <motion.div
-                              key={item.id} layoutId={`item-${item.id}`} layout
-                              initial={{ opacity: 0, scale: 0.5, y: 50 }}
-                              animate={{ opacity: 1, scale: 1, y: 0 }}
-                              exit={{ opacity: 0, scale: 0.5, y: 50 }}
-                              transition={{ delay: idx * 0.01 }}
-                              onClick={() => setSelectedItem(item)}
-                              className="aspect-square w-full bg-white rounded-md shadow-md border border-slate-100 overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all group relative z-0 hover:z-50"
-                            >
-                               <img src={item.image} alt="" className="w-full h-full object-cover" />
-                            </motion.div>
-                          ))}
-                        </AnimatePresence>
+                {(() => {
+                  const maxCount = Math.max(...groupKeys.map(k => groupedItems[k].length), 1);
+                  const availableHeight = viewportSize.height - 320;
+                  const cardSize = Math.max(16, Math.min(80, Math.floor(availableHeight / Math.max(maxCount * 0.28, 1))));
+                  const peekPerCard = maxCount > 1 ? Math.max(3, (availableHeight - cardSize) / (maxCount - 1)) : cardSize + 4;
+                  const defaultGap = peekPerCard - cardSize;
+
+                  return groupKeys.map(key => {
+                    const itemsInGroup = groupedItems[key];
+                    const groupGap = itemsInGroup.length <= 1 ? 4 : Math.min(4, defaultGap);
+
+                    return (
+                      <div key={key} className="flex-1 flex flex-col items-center gap-2 h-full justify-end min-w-[40px]" style={{ maxWidth: `${cardSize + 40}px` }}>
+                        <div className="flex flex-col-reverse w-full" style={{ gap: `${groupGap}px` }}>
+                          <AnimatePresence mode="popLayout">
+                            {itemsInGroup.map((item, idx) => (
+                              <motion.div
+                                key={item.id} layoutId={`item-${item.id}`} layout
+                                initial={{ opacity: 0, scale: 0.5, y: 50 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.5, y: 50 }}
+                                transition={{ delay: idx * 0.01 }}
+                                onClick={() => setSelectedItem(item)}
+                                className="bg-white rounded-md shadow-md border border-slate-100 overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all group relative z-0 hover:z-50"
+                                style={{ width: `${cardSize}px`, height: `${cardSize}px` }}
+                              >
+                                 <img src={item.image} alt={item.title} className="w-full h-full object-cover" />
+                              </motion.div>
+                            ))}
+                          </AnimatePresence>
+                        </div>
+                        <div className="text-center mt-2">
+                           <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest truncate" style={{ width: `${cardSize + 20}px` }}>{key}</div>
+                           <div className="text-lg font-black text-slate-800">{itemsInGroup.length}</div>
+                        </div>
                       </div>
-                      <div className="text-center mt-4">
-                         <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest truncate w-16">{key}</div>
-                         <div className="text-lg font-black text-slate-800">{itemsInGroup.length}</div>
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  });
+                })()}
               </motion.div>
             )}
           </AnimatePresence>
