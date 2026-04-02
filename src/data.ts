@@ -9,6 +9,7 @@ export interface Item {
   image: string;
   email?: string;
   url?: string;
+  fields: Record<string, string>;  // all raw column values preserved
 }
 
 const CATEGORIES = ["Development", "Design", "Data", "Architecture", "Security", "Mobile", "Cloud"];
@@ -67,7 +68,7 @@ const generateItems = (count: number): Item[] => {
     const description = DESCRIPTIONS[Math.floor(rand() * DESCRIPTIONS.length)];
 
     const authorSlug = author.toLowerCase().replace(/\s+/g, ".");
-    items.push({
+    const item = {
       id: i,
       title: `${category} Concept #${i}`,
       description,
@@ -78,7 +79,10 @@ const generateItems = (count: number): Item[] => {
       image: `https://picsum.photos/seed/${i + 100}/300/400`,
       email: `${authorSlug}@example.com`,
       url: `https://example.com/${category.toLowerCase()}/${i}`,
-    });
+      fields: {} as Record<string, string>,
+    };
+    item.fields = { id: String(i), title: item.title, description, category, tags: tags.join(';'), author, year: String(year), email: item.email!, url: item.url!, image: item.image };
+    items.push(item);
   }
   return items;
 };

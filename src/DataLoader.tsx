@@ -307,7 +307,7 @@ const DataLoader: React.FC<DataLoaderProps> = ({ onDataLoaded, onCancel }) => {
               </select>
             </div>
             <div>
-              <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Year Field</label>
+              <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Continuous (Range Slider)</label>
               <select value={yearField} onChange={e => setYearField(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
                 <option value="">None</option>

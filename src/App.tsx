@@ -5,19 +5,25 @@ import { ITEMS as DEFAULT_ITEMS, Item } from './data';
 import DataLoader, { ColumnMapping } from './DataLoader';
 
 const App: React.FC = () => {
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [selectedAuthors, setSelectedAuthors] = useState<string[]>([]);
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [selectedFilters, setSelectedFilters] = useState<Record<string, string[]>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [viewType, setViewType] = useState<'grid' | 'group'>('grid');
-  const [groupBy, setGroupBy] = useState<'category' | 'year' | 'author' | 'tag'>('category');
+  const [groupBy, setGroupBy] = useState<string>('category');
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [showImporter, setShowImporter] = useState(false);
   const [importedItems, setImportedItems] = useState<Item[] | null>(null);
   const [imageBlobs, setImageBlobs] = useState<Record<string, string>>({});
   const [useDemo, setUseDemo] = useState(false);
+  const [columnMapping, setColumnMapping] = useState<ColumnMapping | null>(null);
 
   const ITEMS = importedItems || (useDemo ? DEFAULT_ITEMS : []);
+
+  // Dynamic groupable field names (from mapping or defaults for demo)
+  const groupableFields = useMemo(() => {
+    if (columnMapping) return columnMapping.groupableFields;
+    if (useDemo) return ['category', 'year', 'author', 'tags'];
+    return [];
+  }, [columnMapping, useDemo]);
 
   // 1. Viewport Size Tracking (Define this first!)
   const [viewportSize, setViewportSize] = useState({ 
@@ -72,18 +78,19 @@ const App: React.FC = () => {
 
   const filteredItems = useMemo(() => {
     return ITEMS.filter(item => {
-      const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(item.category);
-      const matchesAuthor = selectedAuthors.length === 0 || selectedAuthors.includes(item.author);
-      const matchesTags = selectedTags.length === 0 || selectedTags.some(t => item.tags.includes(t));
+      // Dynamic field filters
+      const matchesFilters = Object.entries(selectedFilters).every(([field, selected]) => {
+        if (selected.length === 0) return true;
+        const values = getItemValues(item, field);
+        return selected.some(s => values.includes(s));
+      });
       const matchesSearch = searchQuery === '' ||
-        item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.author.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (item.description || '').toLowerCase().includes(searchQuery.toLowerCase());
+        Object.values(item.fields || {}).some(v => String(v).toLowerCase().includes(searchQuery.toLowerCase())) ||
+        item.title.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesYear = item.year >= yearRange[0] && item.year <= yearRange[1];
-      return matchesCategory && matchesAuthor && matchesTags && matchesSearch && matchesYear;
+      return matchesFilters && matchesSearch && matchesYear;
     });
-  }, [ITEMS, selectedCategories, selectedAuthors, selectedTags, searchQuery, yearRange]);
+  }, [ITEMS, selectedFilters, searchQuery, yearRange]);
 
   // 4. --- Viewport-Aware Dynamic Grid Scaling Strategy ---
   const { densityMode, cardSize } = useMemo(() => {
@@ -103,40 +110,47 @@ const App: React.FC = () => {
   }, [filteredItems.length, viewportSize]);
 
   // 5. Dynamic Grouping Logic
-  const groupKeys = useMemo(() => {
-    switch (groupBy) {
-      case 'category': return categories;
-      case 'year': return years.map(String);
-      case 'author': return allAuthors;
-      case 'tag': return allTags;
-    }
-  }, [groupBy, categories, years, allAuthors, allTags]);
-
-  const getItemKeys = (item: Item): string[] => {
-    switch (groupBy) {
-      case 'category': return [item.category];
-      case 'year': return [String(item.year)];
-      case 'author': return [item.author];
-      case 'tag': return item.tags;
-    }
+  const getItemValues = (item: Item, field: string): string[] => {
+    // Check fields map first (imported data), then known properties
+    const raw = item.fields?.[field] ?? (item as Record<string, unknown>)[field];
+    if (raw === undefined || raw === null || raw === '') return [''];
+    const str = String(raw);
+    // If semicolon-separated, split into multiple values
+    if (str.includes(';')) return str.split(';').map(s => s.trim()).filter(Boolean);
+    return [str];
   };
+
+  const groupKeys = useMemo(() => {
+    const keySet = new Set<string>();
+    ITEMS.forEach(item => {
+      getItemValues(item, groupBy).forEach(v => { if (v) keySet.add(v); });
+    });
+    return Array.from(keySet).sort();
+  }, [ITEMS, groupBy]);
 
   const groupedItems = useMemo(() => {
     const groups: Record<string, Item[]> = {};
     groupKeys.forEach(key => { groups[key] = []; });
     filteredItems.forEach(item => {
-      const keys = getItemKeys(item);
-      keys.forEach(key => {
+      getItemValues(item, groupBy).forEach(key => {
         if (groups[key]) groups[key].push(item);
       });
     });
     return groups;
   }, [filteredItems, groupKeys, groupBy]);
 
-  const toggleCategory = (category: string) => {
-    setSelectedCategories(prev => 
-      prev.includes(category) ? prev.filter(c => c !== category) : [...prev, category]
-    );
+  const toggleFilter = (field: string, value: string) => {
+    setSelectedFilters(prev => {
+      const current = prev[field] || [];
+      const updated = current.includes(value)
+        ? current.filter(v => v !== value)
+        : [...current, value];
+      return { ...prev, [field]: updated };
+    });
+  };
+
+  const clearFilter = (field: string) => {
+    setSelectedFilters(prev => ({ ...prev, [field]: [] }));
   };
 
   const handleDataLoaded = (
@@ -147,26 +161,35 @@ const App: React.FC = () => {
   ) => {
     const items: Item[] = rows.map((row, i) => {
       const imageVal = mapping.imageField ? row[mapping.imageField] || '' : '';
-      // Resolve image: check blobs (ZIP images), then try images/ prefix, then raw value
       const resolvedImage = blobs[imageVal] || blobs[`images/${imageVal}`] || imageVal;
+
+      // First groupable field as category, find tags-like fields (semicolon values)
+      const catField = mapping.groupableFields[0] || '';
+      const tagField = mapping.groupableFields.find(f => {
+        const sample = row[f] || '';
+        return sample.includes(';');
+      }) || '';
 
       return {
         id: i + 1,
         title: row[mapping.titleField] || `Item ${i + 1}`,
-        description: row['description'] || '',
-        category: mapping.groupableFields[0] ? row[mapping.groupableFields[0]] || '' : '',
-        tags: row['tags'] ? row['tags'].split(';').map(t => t.trim()).filter(Boolean) : [],
-        author: row['author'] || '',
+        description: row['description'] || row[mapping.displayFields.find(f => f.toLowerCase().includes('desc')) || ''] || '',
+        category: catField ? row[catField] || '' : '',
+        tags: tagField ? row[tagField].split(';').map(t => t.trim()).filter(Boolean) : [],
+        author: row['author'] || row['name'] || '',
         year: mapping.yearField ? parseInt(row[mapping.yearField]) || 0 : 0,
         image: resolvedImage,
         email: row['email'] || '',
         url: row['url'] || '',
+        fields: { ...row },
       };
     });
 
     setImportedItems(items);
     setImageBlobs(blobs);
+    setColumnMapping(mapping);
     setShowImporter(false);
+    setGroupBy(mapping.groupableFields[0] || 'category');
     clearFilters();
   };
 
@@ -208,9 +231,7 @@ const App: React.FC = () => {
   };
 
   const clearFilters = () => {
-    setSelectedCategories([]);
-    setSelectedAuthors([]);
-    setSelectedTags([]);
+    setSelectedFilters({});
     setSearchQuery('');
     setYearRange([minYear, maxYear]);
   };
@@ -254,22 +275,17 @@ const App: React.FC = () => {
               <BarChart2 size={14} /> Stack By
             </h3>
             <div className="flex flex-wrap gap-1.5">
-              {([
-                { key: 'category', label: 'Category' },
-                { key: 'year', label: 'Year' },
-                { key: 'author', label: 'Author' },
-                { key: 'tag', label: 'Tag' },
-              ] as const).map(opt => (
+              {groupableFields.map(field => (
                 <button
-                  key={opt.key}
-                  onClick={() => { setGroupBy(opt.key); setViewType('group'); }}
+                  key={field}
+                  onClick={() => { setGroupBy(field); setViewType('group'); }}
                   className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
-                    groupBy === opt.key && viewType === 'group'
+                    groupBy === field && viewType === 'group'
                       ? 'bg-blue-600 text-white shadow-md'
                       : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                   }`}
                 >
-                  {opt.label}
+                  {field}
                 </button>
               ))}
             </div>
@@ -349,95 +365,45 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                <Filter size={14} /> Categories
-              </h3>
-              {selectedCategories.length > 0 && (
-                <button onClick={() => setSelectedCategories([])} className="text-[10px] font-bold text-blue-600 hover:text-blue-700 transition-colors">
-                  RESET
-                </button>
-              )}
-            </div>
-            <div className="space-y-1 max-h-48 overflow-y-auto">
-              {categories.map(cat => (
-                <label key={cat} className="flex items-center gap-3 group cursor-pointer p-2 rounded-lg hover:bg-slate-50 transition-colors">
-                  <input 
-                    type="checkbox" 
-                    className="peer appearance-none w-5 h-5 border-2 border-slate-200 rounded-md checked:bg-blue-600 checked:border-blue-600 transition-all cursor-pointer"
-                    checked={selectedCategories.includes(cat)}
-                    onChange={() => toggleCategory(cat)}
-                  />
-                  <span className={`text-sm font-medium transition-colors ${selectedCategories.includes(cat) ? 'text-slate-900' : 'text-slate-500'}`}>
-                    {cat}
-                  </span>
-                  <span className="ml-auto text-[10px] px-2 py-0.5 bg-slate-100 text-slate-400 rounded-full font-bold">
-                    {ITEMS.filter(i => i.category === cat).length}
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
+          {groupableFields.map(field => {
+            const uniqueValues = Array.from(new Set(
+              ITEMS.flatMap(item => getItemValues(item, field))
+            )).filter(Boolean).sort();
+            const selected = selectedFilters[field] || [];
 
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                <User size={14} /> Authors
-              </h3>
-              {selectedAuthors.length > 0 && (
-                <button onClick={() => setSelectedAuthors([])} className="text-[10px] font-bold text-blue-600 hover:text-blue-700 transition-colors">
-                  RESET
-                </button>
-              )}
-            </div>
-            <div className="space-y-1 max-h-40 overflow-y-auto">
-              {allAuthors.map(author => (
-                <label key={author} className="flex items-center gap-3 group cursor-pointer p-1.5 rounded-lg hover:bg-slate-50 transition-colors">
-                  <input
-                    type="checkbox"
-                    className="peer appearance-none w-4 h-4 border-2 border-slate-200 rounded-md checked:bg-blue-600 checked:border-blue-600 transition-all cursor-pointer"
-                    checked={selectedAuthors.includes(author)}
-                    onChange={() => setSelectedAuthors(prev => prev.includes(author) ? prev.filter(a => a !== author) : [...prev, author])}
-                  />
-                  <span className={`text-xs font-medium transition-colors truncate ${selectedAuthors.includes(author) ? 'text-slate-900' : 'text-slate-500'}`}>
-                    {author}
-                  </span>
-                  <span className="ml-auto text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-400 rounded-full font-bold shrink-0">
-                    {ITEMS.filter(i => i.author === author).length}
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                <Tag size={14} /> Tags
-              </h3>
-              {selectedTags.length > 0 && (
-                <button onClick={() => setSelectedTags([])} className="text-[10px] font-bold text-blue-600 hover:text-blue-700 transition-colors">
-                  RESET
-                </button>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
-              {allTags.map(tag => (
-                <button
-                  key={tag}
-                  onClick={() => setSelectedTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag])}
-                  className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition-all ${
-                    selectedTags.includes(tag)
-                      ? 'bg-blue-600 text-white shadow-md'
-                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                  }`}
-                >
-                  {tag}
-                </button>
-              ))}
-            </div>
-          </div>
+            return (
+              <div key={field} className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                    <Filter size={14} /> {field}
+                  </h3>
+                  {selected.length > 0 && (
+                    <button onClick={() => clearFilter(field)} className="text-[10px] font-bold text-blue-600 hover:text-blue-700 transition-colors">
+                      RESET
+                    </button>
+                  )}
+                </div>
+                <div className="space-y-1 max-h-40 overflow-y-auto">
+                  {uniqueValues.map(val => (
+                    <label key={val} className="flex items-center gap-3 group cursor-pointer p-1.5 rounded-lg hover:bg-slate-50 transition-colors">
+                      <input
+                        type="checkbox"
+                        className="peer appearance-none w-4 h-4 border-2 border-slate-200 rounded-md checked:bg-blue-600 checked:border-blue-600 transition-all cursor-pointer"
+                        checked={selected.includes(val)}
+                        onChange={() => toggleFilter(field, val)}
+                      />
+                      <span className={`text-xs font-medium transition-colors truncate ${selected.includes(val) ? 'text-slate-900' : 'text-slate-500'}`}>
+                        {val}
+                      </span>
+                      <span className="ml-auto text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-400 rounded-full font-bold shrink-0">
+                        {ITEMS.filter(i => getItemValues(i, field).includes(val)).length}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
           </>
           )}
         </div>
