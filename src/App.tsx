@@ -5,6 +5,8 @@ import { ITEMS, Item } from './data';
 
 const App: React.FC = () => {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedAuthors, setSelectedAuthors] = useState<string[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [viewType, setViewType] = useState<'grid' | 'group'>('grid');
   const [groupBy, setGroupBy] = useState<'category' | 'year'>('category');
@@ -32,6 +34,14 @@ const App: React.FC = () => {
     return Array.from(new Set(ITEMS.map(item => item.category))).sort();
   }, []);
 
+  const allAuthors = useMemo(() => {
+    return Array.from(new Set(ITEMS.map(item => item.author))).sort();
+  }, []);
+
+  const allTags = useMemo(() => {
+    return Array.from(new Set(ITEMS.flatMap(item => item.tags))).sort();
+  }, []);
+
   const years = useMemo(() => {
     const yearsArr = [];
     for (let y = minYear; y <= maxYear; y++) yearsArr.push(y);
@@ -51,12 +61,17 @@ const App: React.FC = () => {
   const filteredItems = useMemo(() => {
     return ITEMS.filter(item => {
       const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(item.category);
-      const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                           item.author.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesAuthor = selectedAuthors.length === 0 || selectedAuthors.includes(item.author);
+      const matchesTags = selectedTags.length === 0 || selectedTags.some(t => item.tags.includes(t));
+      const matchesSearch = searchQuery === '' ||
+        item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.author.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (item.description || '').toLowerCase().includes(searchQuery.toLowerCase());
       const matchesYear = item.year >= yearRange[0] && item.year <= yearRange[1];
-      return matchesCategory && matchesSearch && matchesYear;
+      return matchesCategory && matchesAuthor && matchesTags && matchesSearch && matchesYear;
     });
-  }, [selectedCategories, searchQuery, yearRange]);
+  }, [selectedCategories, selectedAuthors, selectedTags, searchQuery, yearRange]);
 
   // 4. --- Viewport-Aware Dynamic Grid Scaling Strategy ---
   const { densityMode, cardSize } = useMemo(() => {
@@ -98,9 +113,9 @@ const App: React.FC = () => {
   };
 
   const downloadCSV = () => {
-    const header = "id,title,category,author,year,image";
+    const header = "id,title,description,category,tags,author,year,email,url,image";
     const rows = filteredItems.map(i =>
-      `${i.id},"${i.title}","${i.category}","${i.author}",${i.year},"${i.image}"`
+      `${i.id},"${i.title}","${i.description}","${i.category}","${i.tags.join(';')}","${i.author}",${i.year},"${i.email || ''}","${i.url || ''}","${i.image}"`
     );
     const csv = [header, ...rows].join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
@@ -114,6 +129,8 @@ const App: React.FC = () => {
 
   const clearFilters = () => {
     setSelectedCategories([]);
+    setSelectedAuthors([]);
+    setSelectedTags([]);
     setSearchQuery('');
     setYearRange([minYear, maxYear]);
   };
@@ -231,7 +248,7 @@ const App: React.FC = () => {
                 </button>
               )}
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1 max-h-48 overflow-y-auto">
               {categories.map(cat => (
                 <label key={cat} className="flex items-center gap-3 group cursor-pointer p-2 rounded-lg hover:bg-slate-50 transition-colors">
                   <input 
@@ -247,6 +264,65 @@ const App: React.FC = () => {
                     {ITEMS.filter(i => i.category === cat).length}
                   </span>
                 </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                <User size={14} /> Authors
+              </h3>
+              {selectedAuthors.length > 0 && (
+                <button onClick={() => setSelectedAuthors([])} className="text-[10px] font-bold text-blue-600 hover:text-blue-700 transition-colors">
+                  RESET
+                </button>
+              )}
+            </div>
+            <div className="space-y-1 max-h-40 overflow-y-auto">
+              {allAuthors.map(author => (
+                <label key={author} className="flex items-center gap-3 group cursor-pointer p-1.5 rounded-lg hover:bg-slate-50 transition-colors">
+                  <input
+                    type="checkbox"
+                    className="peer appearance-none w-4 h-4 border-2 border-slate-200 rounded-md checked:bg-blue-600 checked:border-blue-600 transition-all cursor-pointer"
+                    checked={selectedAuthors.includes(author)}
+                    onChange={() => setSelectedAuthors(prev => prev.includes(author) ? prev.filter(a => a !== author) : [...prev, author])}
+                  />
+                  <span className={`text-xs font-medium transition-colors truncate ${selectedAuthors.includes(author) ? 'text-slate-900' : 'text-slate-500'}`}>
+                    {author}
+                  </span>
+                  <span className="ml-auto text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-400 rounded-full font-bold shrink-0">
+                    {ITEMS.filter(i => i.author === author).length}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                <Tag size={14} /> Tags
+              </h3>
+              {selectedTags.length > 0 && (
+                <button onClick={() => setSelectedTags([])} className="text-[10px] font-bold text-blue-600 hover:text-blue-700 transition-colors">
+                  RESET
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
+              {allTags.map(tag => (
+                <button
+                  key={tag}
+                  onClick={() => setSelectedTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag])}
+                  className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition-all ${
+                    selectedTags.includes(tag)
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                  }`}
+                >
+                  {tag}
+                </button>
               ))}
             </div>
           </div>
@@ -487,17 +563,33 @@ const App: React.FC = () => {
                    <h2 className="text-3xl font-black text-slate-900 leading-tight mb-3">{selectedItem.title}</h2>
 
                    {/* Metadata */}
-                   <div className="flex flex-wrap gap-4 mb-8 text-sm text-slate-500">
+                   <div className="flex flex-wrap gap-4 mb-4 text-sm text-slate-500">
                      <span className="flex items-center gap-1.5"><User size={14} /> {selectedItem.author}</span>
                      <span className="flex items-center gap-1.5"><Calendar size={14} /> {selectedItem.year}</span>
                      <span className="flex items-center gap-1.5"><Hash size={14} /> ID-{selectedItem.id}</span>
                    </div>
 
+                   {/* Tags */}
+                   {selectedItem.tags.length > 0 && (
+                     <div className="flex flex-wrap gap-1.5 mb-6">
+                       {selectedItem.tags.map(tag => (
+                         <span key={tag} className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-full">{tag}</span>
+                       ))}
+                     </div>
+                   )}
+
+                   {/* Links */}
+                   <div className="flex flex-wrap gap-3 mb-6 text-xs">
+                     {selectedItem.email && (
+                       <a href={`mailto:${selectedItem.email}`} className="text-blue-600 hover:underline">{selectedItem.email}</a>
+                     )}
+                     {selectedItem.url && (
+                       <a href={selectedItem.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{selectedItem.url}</a>
+                     )}
+                   </div>
+
                    <div className="text-sm border-t border-slate-100 pt-6 text-slate-500 leading-relaxed mb-8">
-                      <p>
-                        Explore detailed insights about this discovery. In high-density mode,
-                        the system optimizes the display for pattern recognition, while detail view provides the full semantic context.
-                      </p>
+                      <p>{selectedItem.description}</p>
                    </div>
 
                    {/* Related items */}
