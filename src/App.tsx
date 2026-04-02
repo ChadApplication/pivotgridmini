@@ -11,6 +11,8 @@ const App: React.FC = () => {
   const [groupBy, setGroupBy] = useState<string>('category');
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [zoomLevel, setZoomLevel] = useState(1.0);
+  const [filterSort, setFilterSort] = useState<Record<string, 'name' | 'count'>>({});
+  const [groupSort, setGroupSort] = useState<'name-asc' | 'name-desc' | 'count-asc' | 'count-desc'>('name-asc');
   const [showImporter, setShowImporter] = useState(false);
   const [importedItems, setImportedItems] = useState<Item[] | null>(null);
   const [imageBlobs, setImageBlobs] = useState<Record<string, string>>({});
@@ -38,16 +40,20 @@ const App: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Cmd/Ctrl + scroll zoom
+  // Scroll zoom (no modifier key needed when cursor is over content area)
+  const contentRef = React.useRef<HTMLDivElement>(null);
   useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
     const handler = (e: WheelEvent) => {
       if (e.metaKey || e.ctrlKey) {
         e.preventDefault();
-        setZoomLevel(prev => Math.min(3.0, Math.max(0.3, prev + (e.deltaY > 0 ? -0.05 : 0.05))));
+        e.stopPropagation();
+        setZoomLevel(prev => Math.min(3.0, Math.max(0.3, prev + (e.deltaY > 0 ? -0.08 : 0.08))));
       }
     };
-    window.addEventListener('wheel', handler, { passive: false });
-    return () => window.removeEventListener('wheel', handler);
+    el.addEventListener('wheel', handler, { passive: false });
+    return () => el.removeEventListener('wheel', handler);
   }, []);
 
   // 2. Year Range State
@@ -129,7 +135,10 @@ const App: React.FC = () => {
         Object.values(item.fields || {}).some(v => String(v).toLowerCase().includes(searchQuery.toLowerCase())) ||
         item.title.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesRanges = Object.entries(rangeFilters).every(([field, [lo, hi]]) => {
-        const val = Number(item.fields?.[field] ?? (item as Record<string, unknown>)[field]) || 0;
+        const raw = item.fields?.[field] ?? (item as Record<string, unknown>)[field];
+        if (raw === undefined || raw === null || raw === '') return true;
+        const val = Number(raw);
+        if (isNaN(val)) return true;
         return val >= lo && val <= hi;
       });
       return matchesFilters && matchesSearch && matchesRanges;
@@ -165,12 +174,18 @@ const App: React.FC = () => {
   };
 
   const groupKeys = useMemo(() => {
-    const keySet = new Set<string>();
+    const countMap: Record<string, number> = {};
     ITEMS.forEach(item => {
-      getItemValues(item, groupBy).forEach(v => { if (v) keySet.add(v); });
+      getItemValues(item, groupBy).forEach(v => { if (v) countMap[v] = (countMap[v] || 0) + 1; });
     });
-    return Array.from(keySet).sort();
-  }, [ITEMS, groupBy]);
+    const keys = Object.keys(countMap);
+    switch (groupSort) {
+      case 'name-asc': return keys.sort((a, b) => a.localeCompare(b));
+      case 'name-desc': return keys.sort((a, b) => b.localeCompare(a));
+      case 'count-asc': return keys.sort((a, b) => countMap[a] - countMap[b]);
+      case 'count-desc': return keys.sort((a, b) => countMap[b] - countMap[a]);
+    }
+  }, [ITEMS, groupBy, groupSort]);
 
   const groupedItems = useMemo(() => {
     const groups: Record<string, Item[]> = {};
@@ -217,7 +232,7 @@ const App: React.FC = () => {
       return {
         id: i + 1,
         title: row[mapping.titleField] || `Item ${i + 1}`,
-        description: row['description'] || row[mapping.displayFields.find(f => f.toLowerCase().includes('desc')) || ''] || '',
+        description: mapping.descriptionField ? row[mapping.descriptionField] || '' : '',
         category: catField ? row[catField] || '' : '',
         tags: tagField ? row[tagField].split(';').map(t => t.trim()).filter(Boolean) : [],
         author: row['author'] || row['name'] || '',
@@ -372,19 +387,19 @@ const App: React.FC = () => {
                       type="range" min={mm.min} max={mm.max} value={range[0]}
                       onChange={(e) => {
                         const val = parseInt(e.target.value);
-                        setRangeFilters(prev => ({ ...prev, [field]: [Math.min(val, range[1] - 1), range[1]] }));
+                        setRangeFilters(prev => ({ ...prev, [field]: [Math.min(val, range[1]), range[1]] }));
                       }}
                       className="range-slider-input absolute w-full h-1.5 bg-transparent appearance-none cursor-pointer accent-blue-600 pointer-events-auto"
-                      style={{ zIndex: range[0] < mm.min + (mm.max - mm.min) / 2 ? 50 : 30 }}
+                      style={{ zIndex: range[0] === range[1] ? 50 : range[0] > mm.min + (mm.max - mm.min) / 2 ? 30 : 50 }}
                     />
                     <input
                       type="range" min={mm.min} max={mm.max} value={range[1]}
                       onChange={(e) => {
                         const val = parseInt(e.target.value);
-                        setRangeFilters(prev => ({ ...prev, [field]: [range[0], Math.max(val, range[0] + 1)] }));
+                        setRangeFilters(prev => ({ ...prev, [field]: [range[0], Math.max(val, range[0])] }));
                       }}
                       className="range-slider-input absolute w-full h-1.5 bg-transparent appearance-none cursor-pointer accent-blue-600 pointer-events-auto"
-                      style={{ zIndex: range[1] > mm.max - (mm.max - mm.min) / 2 ? 50 : 30 }}
+                      style={{ zIndex: range[0] === range[1] ? 40 : range[1] > mm.max - (mm.max - mm.min) / 2 ? 50 : 30 }}
                     />
                     <div className="absolute inset-x-0 h-1.5 bg-slate-100 rounded-full" />
                     <div
@@ -405,9 +420,15 @@ const App: React.FC = () => {
           })}
 
           {groupableFields.map(field => {
-            const uniqueValues = Array.from(new Set(
-              ITEMS.flatMap(item => getItemValues(item, field))
-            )).filter(Boolean).sort();
+            const sortMode = filterSort[field] || 'name';
+            const countMap: Record<string, number> = {};
+            ITEMS.forEach(item => {
+              getItemValues(item, field).forEach(v => { if (v) countMap[v] = (countMap[v] || 0) + 1; });
+            });
+            const uniqueValues = Object.keys(countMap).sort((a, b) => {
+              if (sortMode === 'count') return countMap[b] - countMap[a];
+              return a.localeCompare(b);
+            });
             const selected = selectedFilters[field] || [];
 
             return (
@@ -416,11 +437,20 @@ const App: React.FC = () => {
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
                     <Filter size={14} /> {field}
                   </h3>
-                  {selected.length > 0 && (
-                    <button onClick={() => clearFilter(field)} className="text-[10px] font-bold text-blue-600 hover:text-blue-700 transition-colors">
-                      RESET
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setFilterSort(prev => ({ ...prev, [field]: sortMode === 'name' ? 'count' : 'name' }))}
+                      className="text-[9px] font-bold text-slate-400 hover:text-blue-600 transition-colors px-1"
+                      title={sortMode === 'name' ? 'Sort by count' : 'Sort by name'}
+                    >
+                      {sortMode === 'name' ? 'A-Z' : '#'}
                     </button>
-                  )}
+                    {selected.length > 0 && (
+                      <button onClick={() => clearFilter(field)} className="text-[10px] font-bold text-blue-600 hover:text-blue-700 transition-colors">
+                        RESET
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="space-y-1 max-h-40 overflow-y-auto">
                   {uniqueValues.map(val => (
@@ -482,6 +512,28 @@ const App: React.FC = () => {
              </div>
           </div>
           <div className="flex items-center gap-2">
+            {viewType === 'group' && (
+              <div className="flex items-center bg-slate-100 rounded-xl p-0.5">
+                {([
+                  { key: 'name-asc', label: 'A↑' },
+                  { key: 'name-desc', label: 'A↓' },
+                  { key: 'count-asc', label: '#↑' },
+                  { key: 'count-desc', label: '#↓' },
+                ] as const).map(opt => (
+                  <button
+                    key={opt.key}
+                    onClick={() => setGroupSort(opt.key)}
+                    className={`px-2 py-1 rounded-lg text-[9px] font-bold transition-all ${
+                      groupSort === opt.key
+                        ? 'bg-white shadow-sm text-blue-600'
+                        : 'text-slate-400 hover:text-slate-600'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="flex items-center gap-1.5 bg-slate-100 rounded-xl px-2 py-1">
               <button onClick={() => setZoomLevel(prev => Math.max(0.3, prev - 0.15))} className="p-1 rounded-lg text-slate-400 hover:text-slate-700 transition-colors">
                 <ZoomOut size={14} />
@@ -528,7 +580,7 @@ const App: React.FC = () => {
           </div>
         </header>
 
-        <div className={`flex-1 bg-slate-50/30 ${viewType === 'grid' ? 'overflow-y-auto p-10 lg:p-14' : 'overflow-hidden p-2'}`}>
+        <div ref={contentRef} className={`flex-1 bg-slate-50/30 ${viewType === 'grid' ? 'overflow-y-auto p-10 lg:p-14' : 'overflow-hidden p-2'}`}>
           {ITEMS.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center">
               <div className="w-20 h-20 bg-slate-100 rounded-3xl flex items-center justify-center mb-6">
@@ -588,8 +640,8 @@ const App: React.FC = () => {
                   const numCols = Math.ceil(maxCount / COL_THRESHOLD);
                   const effectiveMax = Math.ceil(maxCount / numCols);
                   const availableHeight = viewportSize.height - 140 - 50 - 60;
-                  const maxCardSize = Math.min(80, Math.floor(availableHeight / effectiveMax));
-                  const cardSize = Math.max(20, maxCardSize);
+                  const maxCardSize = Math.min(80 * zoomLevel, Math.floor(availableHeight / effectiveMax));
+                  const cardSize = Math.max(16, maxCardSize);
                   const peekPerCard = effectiveMax > 1 ? Math.max(3, (availableHeight - cardSize) / (effectiveMax - 1)) : cardSize + 4;
                   const defaultGap = peekPerCard - cardSize;
 

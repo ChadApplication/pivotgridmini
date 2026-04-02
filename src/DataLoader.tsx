@@ -4,6 +4,7 @@ import JSZip from 'jszip';
 
 export interface ColumnMapping {
   titleField: string;
+  descriptionField: string;
   imageField: string;
   continuousFields: string[];
   groupableFields: string[];
@@ -60,6 +61,7 @@ const DataLoader: React.FC<DataLoaderProps> = ({ onDataLoaded, onCancel }) => {
 
   // Step 2: mapping state
   const [titleField, setTitleField] = useState('');
+  const [descriptionField, setDescriptionField] = useState('');
   const [imageField, setImageField] = useState('');
   const [continuousFields, setContinuousFields] = useState<string[]>([]);
   const [groupableFields, setGroupableFields] = useState<string[]>([]);
@@ -72,6 +74,7 @@ const DataLoader: React.FC<DataLoaderProps> = ({ onDataLoaded, onCancel }) => {
 
     const lower = headers.map(h => h.toLowerCase());
     setTitleField(headers[lower.findIndex(h => h.includes('title') || h.includes('name'))] || headers[0]);
+    setDescriptionField(headers[lower.findIndex(h => h.includes('desc') || h.includes('note') || h.includes('content'))] || '');
     setImageField(headers[lower.findIndex(h => h.includes('image') || h.includes('img') || h.includes('photo') || h.includes('thumbnail'))] || '');
     // Auto-detect continuous fields (numeric columns)
     const autoContinuous = headers.filter((h, i) => {
@@ -209,6 +212,7 @@ const DataLoader: React.FC<DataLoaderProps> = ({ onDataLoaded, onCancel }) => {
     if (!titleField) return;
     onDataLoaded(rawData, columns, {
       titleField,
+      descriptionField,
       imageField,
       continuousFields,
       groupableFields,
@@ -323,6 +327,14 @@ const DataLoader: React.FC<DataLoaderProps> = ({ onDataLoaded, onCancel }) => {
               <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Title</label>
               <select value={titleField} onChange={e => setTitleField(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+                {columns.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Description</label>
+              <select value={descriptionField} onChange={e => setDescriptionField(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+                <option value="">None</option>
                 {columns.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
