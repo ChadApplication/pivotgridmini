@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Filter, Grid, LayoutPanelLeft, Search, X, BarChart2, Calendar, Tag, ChevronRight, ChevronLeft, Hash, User, Download, Upload, ZoomIn, ZoomOut } from 'lucide-react';
+import { Filter, Grid, LayoutPanelLeft, Search, X, BarChart2, Calendar, ChevronRight, ChevronLeft, Hash, User, Download, Upload, ZoomIn, ZoomOut } from 'lucide-react';
 import { ITEMS as DEFAULT_ITEMS, Item } from './data';
 import DataLoader, { ColumnMapping } from './DataLoader';
 
@@ -73,7 +73,7 @@ const App: React.FC = () => {
     const result: Record<string, { min: number; max: number }> = {};
     activeContinuous.forEach(field => {
       const vals = ITEMS.map(i => {
-        const v = i.fields?.[field] ?? (i as Record<string, unknown>)[field];
+        const v = i.fields?.[field] ?? (i as unknown as Record<string, unknown>)[field];
         return Number(v) || 0;
       }).filter(v => !isNaN(v));
       result[field] = {
@@ -94,18 +94,6 @@ const App: React.FC = () => {
     setRangeFilters(newRanges);
   }, [rangeMinMax, activeContinuous]);
 
-  const categories = useMemo(() => {
-    return Array.from(new Set(ITEMS.map(item => item.category))).sort();
-  }, [ITEMS]);
-
-  const allAuthors = useMemo(() => {
-    return Array.from(new Set(ITEMS.map(item => item.author))).sort();
-  }, [ITEMS]);
-
-  const allTags = useMemo(() => {
-    return Array.from(new Set(ITEMS.flatMap(item => item.tags))).sort();
-  }, [ITEMS]);
-
   // 3. Histogram per continuous field
   const histogramDataMap = useMemo(() => {
     const result: Record<string, { value: number; count: number }[]> = {};
@@ -115,7 +103,7 @@ const App: React.FC = () => {
       const counts: Record<number, number> = {};
       for (let v = mm.min; v <= mm.max; v++) counts[v] = 0;
       ITEMS.forEach(item => {
-        const val = Number(item.fields?.[field] ?? (item as Record<string, unknown>)[field]) || 0;
+        const val = Number(item.fields?.[field] ?? (item as unknown as Record<string, unknown>)[field]) || 0;
         if (counts[val] !== undefined) counts[val]++;
       });
       result[field] = Object.entries(counts)
@@ -127,7 +115,7 @@ const App: React.FC = () => {
 
   // Dynamic field value accessor (must be before filteredItems)
   const getItemValues = (item: Item, field: string): string[] => {
-    const raw = item.fields?.[field] ?? (item as Record<string, unknown>)[field];
+    const raw = item.fields?.[field] ?? (item as unknown as Record<string, unknown>)[field];
     if (raw === undefined || raw === null || raw === '') return [''];
     const str = String(raw);
     if (str.includes(';')) return str.split(';').map(s => s.trim()).filter(Boolean);
@@ -146,7 +134,7 @@ const App: React.FC = () => {
         Object.values(item.fields || {}).some(v => String(v).toLowerCase().includes(searchQuery.toLowerCase())) ||
         item.title.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesRanges = Object.entries(rangeFilters).every(([field, [lo, hi]]) => {
-        const raw = item.fields?.[field] ?? (item as Record<string, unknown>)[field];
+        const raw = item.fields?.[field] ?? (item as unknown as Record<string, unknown>)[field];
         if (raw === undefined || raw === null || raw === '') return true;
         const val = Number(raw);
         if (isNaN(val)) return true;
